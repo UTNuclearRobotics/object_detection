@@ -1,7 +1,12 @@
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.0.2)
 project(pointcloud_processing)
 
-add_compile_options(-std=c++11)
+
+if(NOT "${CMAKE_CXX_STANDARD}")
+  set(CMAKE_CXX_STANDARD 14)
+endif()
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# add_compile_options(-std=c++11)
 ## Compile as C++11, supported in ROS Kinetic and newer
 # add_compile_options(-std=c++11)
 
@@ -18,6 +23,7 @@ find_package(catkin REQUIRED COMPONENTS
   visualization_msgs
   tf2_sensor_msgs
   vision_msgs
+  geometry_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -31,15 +37,16 @@ find_package(catkin REQUIRED COMPONENTS
 ## catkin specific configuration ##
 ###################################
 catkin_package(
-#  INCLUDE_DIRS include
-  CATKIN_DEPENDS pcl_conversions
-  pcl_ros
-  roscpp
-  message_filters
-  pointcloud_processing_msgs
-  darknet_ros_msgs
-  tf2_sensor_msgs
-  vision_msgs
+  CATKIN_DEPENDS
+    pcl_conversions
+    pcl_ros
+    roscpp
+    message_filters
+    pointcloud_processing_msgs
+    darknet_ros_msgs
+    tf2_sensor_msgs
+    vision_msgs
+    geometry_msgs
 )
 
 ###########
@@ -49,16 +56,21 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
+  include
   ${catkin_INCLUDE_DIRS}
 )
 
 add_executable(rgbd_processing src/pcl_processing.cpp)
 add_executable(rgb_plus_lidar_processing src/sep_processing.cpp)
+add_executable(target_pose_estimation src/target_pose_estimation.cpp)
 #add_executable(people_processing src/people_processing.cpp)
 
 target_link_libraries(rgbd_processing ${catkin_LIBRARIES})
 target_link_libraries(rgb_plus_lidar_processing ${catkin_LIBRARIES})
+target_link_libraries(target_pose_estimation ${catkin_LIBRARIES})
 #target_link_libraries(people_processing ${catkin_LIBRARIES})
+
+add_dependencies(target_pose_estimation ${${PROJECT_NAME}_exported_targets} ${catkin_EXPORTED_TARGETS})
 
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
