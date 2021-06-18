@@ -117,6 +117,8 @@ private:
     geometry_msgs::TransformStamped robot_tf;
     geometry_msgs::TransformStamped camera_tf;
     darknet_ros_msgs::BoundingBox bbox;
+
+    // ros::Publisher debug_pub;
   } UnassignedDetection;
 
   typedef struct
@@ -128,28 +130,25 @@ private:
     std::vector<sensor_msgs::PointCloud2> fov_clouds; // these clouds must be saved in the map frame
     std::vector<geometry_msgs::TransformStamped> robot_tfs;
     std::vector<geometry_msgs::TransformStamped> camera_tfs;
+
+    ros::Publisher debug_pub;
   } TargetDetection;
 
   // class variables
   bool debug_lidar_viz_;
-  geometry_msgs::TransformStamped current_robot_tf_, current_camera_tf_;
+  geometry_msgs::TransformStamped current_robot_tf_, current_camera_tf_, prev_robot_tf_;
 
   // the optical frame of the RGB camera (not the camera base frame)
-  std::string camera_optical_frame_;
-  std::string map_frame_, robot_frame_;
+  std::string camera_optical_frame_, map_frame_, robot_frame_;
 
   // ROS Nodehandle
   ros::NodeHandle private_nh_;
 
   // Publishers
-  ros::Publisher detected_objects_pub_;
-  ros::Publisher lidar_fov_pub_;
-  ros::Publisher lidar_bbox_pub_;
+  ros::Publisher detected_objects_pub_, lidar_fov_pub_, lidar_bbox_pub_, utgt_pub_;
 
   // Subscribers
-  ros::Subscriber bbox_sub_;
-  ros::Subscriber cloud_sub_;
-  ros::Subscriber camera_info_sub_;
+  ros::Subscriber bbox_sub_, cloud_sub_, camera_info_sub_;
 
   // Initialize transform listener
   tf2_ros::Buffer tf_buffer_;
@@ -197,7 +196,7 @@ private:
    * @param dist_threshold The distance threshold to check against
    * @return True if moved beyond the distance threshold, False if not.
    */
-  bool robotHasMoved(const std::string map_frame, const std::string robot_frame, const double dist_threshold);
+  bool robotHasMoved(const double dist_threshold);
 
 
   /**

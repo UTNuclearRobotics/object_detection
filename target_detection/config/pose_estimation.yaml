@@ -1,3 +1,8 @@
 debug_lidar_viz: true
+camera_optical_frame: "walrus/realsense_front_color_optical_frame"
+robot_frame: "walrus/base_link"
+map_frame: "walrus/map"
+distance_threshold: 0.2
+confidence_threshold: 1.0
 object_classes: 
-  chair: '1'
+  person: '1'

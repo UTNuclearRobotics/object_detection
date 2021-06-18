@@ -2,12 +2,20 @@
 <launch>
 
   <!-- ###########################  Pointcloud Processor ############################# -->
-    <node pkg="pointcloud_processing" type="rgb_plus_lidar_processing" name="sep_processing_node" output="screen" args="walrus/realsense_front_color_optical_frame">
+    <!-- <node pkg="pointcloud_processing" type="rgb_plus_lidar_processing" name="sep_processing_node" output="screen" args="walrus/realsense_front_color_optical_frame">
+      <rosparam command="load" file="$(find target_detection)/config/pose_estimation.yaml" />
+      <remap from="~camera_info" to="/camera/color/camera_info"/>
+      <remap from="~bounding_boxes" to="/darknet_ros/bounding_boxes"/>
+      <remap from="~pointcloud" to="/walrus/lidar_points"/>
+    </node> -->
+
+    <node pkg="pointcloud_processing" type="target_pose_estimation" name="target_pose_estimation" output="screen">
       <rosparam command="load" file="$(find target_detection)/config/pose_estimation.yaml" />
       <remap from="~camera_info" to="/camera/color/camera_info"/>
       <remap from="~bounding_boxes" to="/darknet_ros/bounding_boxes"/>
       <remap from="~pointcloud" to="/walrus/lidar_points"/>
     </node>
+
 
   <!-- ########################  Pointcloud transformer  ######################## -->
   <node pkg="nodelet" type="nodelet" name="test_nodelet"  args="manager" output="screen"/>
