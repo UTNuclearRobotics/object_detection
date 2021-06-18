@@ -44,6 +44,11 @@ namespace target_detection {
     private_nh_.param<std::string>("robot_frame", robot_frame_, "base_link");
     private_nh_.param<std::string>("camera_optical_frame", camera_optical_frame_, "camera_optical_link");
 
+    ROS_INFO_STREAM("DEBUG PARAM: " << debug_lidar_viz_);
+    ROS_INFO_STREAM("MAP FRAME PARAM: " << map_frame_);
+    ROS_INFO_STREAM("ROBOT FRAME PARAM: " << robot_frame_);
+    ROS_INFO_STREAM("CAMERA OPT FRAME PARAM: " << camera_optical_frame_);
+
     if (debug_lidar_viz_) {
         lidar_fov_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("lidar_fov", 1);
         lidar_bbox_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("lidar_bbox", 1);
@@ -63,6 +68,7 @@ namespace target_detection {
     ROS_INFO("INITIATE DETS");
     double robot_movement_threshold;
     private_nh_.param<double>("robot_movement_threshold", robot_movement_threshold, 2.0);
+    ROS_INFO_STREAM("MOVEMENT THRESH PARAM: " << robot_movement_threshold);
 
     // init robot pose to map origin
     current_robot_tf_.transform.translation.x = 0;
@@ -81,7 +87,7 @@ namespace target_detection {
 
       // if robot hasn't moved beyond threshold then do nothing
       if (!robotHasMoved(robot_movement_threshold)) {
-        // ROS_INFO("ROBOT HAS NOT MOVED BEYOND THRESH");
+        ROS_INFO_THROTTLE(15.0, "ROBOT HAS NOT MOVED BEYOND THRESH");
         continue;
       }
 
@@ -357,7 +363,8 @@ namespace target_detection {
 
       for (int i = 0; i < pixel_coordinates.size(); ++i) {
         int pixels_to_pad;
-        nh_.param("bbox_pixel_padding", pixels_to_pad, 0);
+        private_nh_.param<int>("bbox_pixel_padding", pixels_to_pad, 0);
+        // ROS_INFO_STREAM("BBOX PIX PARAM: " << pixels_to_pad);
 
           if (pixel_coordinates[i].z > 0 &&
               pixel_coordinates[i].x > (xmin - pixels_to_pad) &&
@@ -424,7 +431,8 @@ namespace target_detection {
       const ros::Time now = ros::Time::now();
 
       double confidence_threshold;
-      nh_.param("confidence_threshold", confidence_threshold, 0.75);
+      private_nh_.param<double>("confidence_threshold", confidence_threshold, 0.75);
+      ROS_INFO_STREAM("CONFIDENCE PARAM: " << confidence_threshold);
 
       // transform the pointcloud into the RGB optical frame
       if (tf2::getFrameId(input_cloud) != camera_optical_frame_) {
@@ -515,6 +523,16 @@ namespace target_detection {
               new_detection.robot_tf = current_robot_tf_;
               new_detection.bbox = box;
               ROS_INFO("UTGT!!!");
+
+              tf2::Stamped<tf2::Transform> temp_tf;
+              tf2::fromMsg(current_camera_tf_, temp_tf);
+              geometry_msgs::TransformStamped inv_cam_tf; 
+              inv_cam_tf.transform = tf2::toMsg(temp_tf.inverse());
+              inv_cam_tf.header.stamp = ros::Time::now();
+              inv_cam_tf.header.frame_id = map_frame_;
+              inv_cam_tf.child_frame_id = camera_optical_frame_;
+              tf2::doTransform(hypothesis.pose.pose.position, new_detection.position.point, inv_cam_tf);
+
               if (debug_lidar_viz_) {
 
                 ROS_INFO_STREAM("PUBING UTGT");
@@ -587,13 +605,22 @@ namespace target_detection {
    * TODO
    */
   bool TargetPoseEstimation::isCloseToTarget(const geometry_msgs::PointStamped pos_in) {
+    ROS_WARN("COMPARING TGT CLOSNESS");
+
     for (const TargetPoseEstimation::TargetDetection &tgt : target_detections_) {
       double dist_check;
       private_nh_.param<double>("distance_between_targets", dist_check, 10.0);
-      
+      ROS_INFO_STREAM("DISTANCE TGTS PARAM: " << dist_check);
+
+      double xc = tgt.position.point.x;
+      double yc = tgt.position.point.y;
+      double xp = pos_in.point.x;
+      double yp = pos_in.point.y;
+      ROS_INFO_STREAM("Xc " << xc << " Xp " << xp << "Yc " << yc << " Yp " << yp << " dist " << ( (xc-xp) * (xc-xp) + (yc-yp) * (yc-yp)));
+
       if ( (tgt.position.point.x - pos_in.point.x) * (tgt.position.point.x - pos_in.point.x)
             + (tgt.position.point.y - pos_in.point.y) * (tgt.position.point.y - pos_in.point.y)
-            > (dist_check * dist_check) ) {
+            < (dist_check * dist_check) ) {
         
         return true;
       }
