@@ -4,5 +4,7 @@ robot_frame: "walrus/base_link"
 map_frame: "walrus/map"
 distance_threshold: 0.2
 confidence_threshold: 1.0
+distance_between_targets: 10.0
+bbox_pixel_padding: 0
 object_classes: 
   person: '1'

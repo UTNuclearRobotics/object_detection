@@ -288,6 +288,12 @@ private:
   /**
    * TODO
    */
+  bool isCloseToTarget(const geometry_msgs::PointStamped pos_in);
+
+
+  /**
+   * TODO
+   */
   int updateRegisteredTarget(const TargetPoseEstimation::UnassignedDetection, const int tgt_index);
 };
 

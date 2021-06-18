@@ -61,8 +61,8 @@ namespace target_detection {
   void TargetPoseEstimation::initiateDetections() {
 
     ROS_INFO("INITIATE DETS");
-    double dist_threshold;
-    private_nh_.param<double>("distance_threshold", dist_threshold, 2.0);
+    double robot_movement_threshold;
+    private_nh_.param<double>("robot_movement_threshold", robot_movement_threshold, 2.0);
 
     // init robot pose to map origin
     current_robot_tf_.transform.translation.x = 0;
@@ -80,7 +80,7 @@ namespace target_detection {
       current_camera_tf_ = updateTf(camera_optical_frame_, map_frame_);
 
       // if robot hasn't moved beyond threshold then do nothing
-      if (!robotHasMoved(dist_threshold)) {
+      if (!robotHasMoved(robot_movement_threshold)) {
         // ROS_INFO("ROBOT HAS NOT MOVED BEYOND THRESH");
         continue;
       }
@@ -108,6 +108,9 @@ namespace target_detection {
           if (const int tgt_id = isRegisteredTarget(utgt->cloud)) {
             ROS_INFO("REGISTERED UTGT TO TGT!!!");
             updateRegisteredTarget(*utgt, (tgt_id - 1));
+            utgt = unassigned_detections_.erase(utgt);
+          } else if (isCloseToTarget(utgt->position)) {
+            ROS_INFO("UTGT IS CLOSE TO A TGT BUT NOT OVERLAPPING PC DATA LET'S IGNORE FOR NOW!!!");
             utgt = unassigned_detections_.erase(utgt);
           } else {
             ++utgt;
@@ -189,10 +192,10 @@ namespace target_detection {
 
   /**
    * @brief Checks if the robot position has moved beyond a distance or rotational threshold in the map frame
-   * @param dist_threshold The distance threshold to check against
+   * @param robot_movement_threshold The distance threshold to check against
    * @return True if moved beyond the distance or rotational threshold, False if not.
    */
-  bool TargetPoseEstimation::robotHasMoved(const double dist_threshold) {
+  bool TargetPoseEstimation::robotHasMoved(const double robot_movement_threshold) {
     
     // double xc = current_robot_tf_.transform.translation.x;
     // double yc = current_robot_tf_.transform.translation.y;
@@ -201,7 +204,7 @@ namespace target_detection {
     // ROS_INFO_STREAM("Xc " << xc << " Xp " << xp << "Yc " << yc << " Yp " << yp << " dist " << ( (xc-xp) * (xc-xp) + (yc-yp) * (yc-yp)));
     if ( (current_robot_tf_.transform.translation.x - prev_robot_tf_.transform.translation.x) * (current_robot_tf_.transform.translation.x - prev_robot_tf_.transform.translation.x)
           + (current_robot_tf_.transform.translation.y - prev_robot_tf_.transform.translation.y) * (current_robot_tf_.transform.translation.y - prev_robot_tf_.transform.translation.y)
-          > (dist_threshold * dist_threshold) ) {
+          > (robot_movement_threshold * robot_movement_threshold) ) {
       return true;
 
     } else {
@@ -353,11 +356,14 @@ namespace target_detection {
 
 
       for (int i = 0; i < pixel_coordinates.size(); ++i) {
+        int pixels_to_pad;
+        nh_.param("bbox_pixel_padding", pixels_to_pad, 0);
+
           if (pixel_coordinates[i].z > 0 &&
-              pixel_coordinates[i].x > xmin &&
-              pixel_coordinates[i].x < xmax &&
-              pixel_coordinates[i].y > ymin &&
-              pixel_coordinates[i].y < ymax)
+              pixel_coordinates[i].x > (xmin - pixels_to_pad) &&
+              pixel_coordinates[i].x < (xmax + pixels_to_pad) &&
+              pixel_coordinates[i].y > (ymin - pixels_to_pad) &&
+              pixel_coordinates[i].y < (ymax + pixels_to_pad))
           {
               indices_in_bbox->indices.push_back(i);
           }
@@ -574,6 +580,26 @@ namespace target_detection {
     }
 
     return 0;
+  }
+
+
+  /**
+   * TODO
+   */
+  bool TargetPoseEstimation::isCloseToTarget(const geometry_msgs::PointStamped pos_in) {
+    for (const TargetPoseEstimation::TargetDetection &tgt : target_detections_) {
+      double dist_check;
+      private_nh_.param<double>("distance_between_targets", dist_check, 10.0);
+      
+      if ( (tgt.position.point.x - pos_in.point.x) * (tgt.position.point.x - pos_in.point.x)
+            + (tgt.position.point.y - pos_in.point.y) * (tgt.position.point.y - pos_in.point.y)
+            > (dist_check * dist_check) ) {
+        
+        return true;
+      }
+
+      return false;
+    }
   }
 
 
