@@ -3,8 +3,13 @@ camera_optical_frame: "walrus/realsense_front_color_optical_frame"
 robot_frame: "walrus/base_link"
 map_frame: "walrus/map"
 distance_threshold: 0.2
-confidence_threshold: 1.0
-distance_between_targets: 10.0
+confidence_threshold: 0.99
+distance_between_targets: 100.0
 bbox_pixel_padding: 0
+bbox_edge_x: 0.3
+bbox_edge_y: 0.01
+robot_turning_threshold: 0.01
 object_classes: 
-  person: '1'
+  fire hydrant : '1'
+  person: '2'
+  motorbike: '3'

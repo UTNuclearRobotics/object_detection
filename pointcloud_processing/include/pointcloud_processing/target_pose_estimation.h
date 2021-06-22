@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <ros/ros.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_sensor_msgs/tf2_sensor_msgs.h>
@@ -112,6 +113,7 @@ private:
 
   typedef struct
   {
+    int target_class;
     sensor_msgs::PointCloud2 cloud; // cloud should be in map frame
     geometry_msgs::PointStamped position; // should be in map frame
     geometry_msgs::TransformStamped robot_tf;
@@ -124,6 +126,7 @@ private:
   typedef struct
   {
     int target_id;
+    int target_class;
     geometry_msgs::PointStamped position;
     sensor_msgs::PointCloud2 cloud; // cloud in map frame
     std::vector<darknet_ros_msgs::BoundingBox> bboxes;
@@ -162,6 +165,8 @@ private:
   std::vector<TargetPoseEstimation::UnassignedDetection> unassigned_detections_;
   std::vector<TargetPoseEstimation::TargetDetection> target_detections_;
 
+  // debug timers
+  std::chrono::high_resolution_clock debug_clock_;
 
   /**
    * @brief Callback function for bounding boxes detected by Darknet
@@ -197,6 +202,14 @@ private:
    * @return True if moved beyond the distance threshold, False if not.
    */
   bool robotHasMoved(const double dist_threshold);
+
+
+  /**
+   * @brief Checks if the robot orientation has varied beyond a certain angle in the past frame
+   * @param robot_turning_threshold The turning threshold to check against
+   * @return True if rotated beyond the rotational threshold, False if not.
+   */
+  bool robotIsTurning(const double robot_turning_threshold);
 
 
   /**
@@ -282,13 +295,13 @@ private:
   /**
    * TODO
    */
-  int isRegisteredTarget(sensor_msgs::PointCloud2 cloud_in);
+  int isRegisteredTarget(const int target_class, sensor_msgs::PointCloud2 cloud_in);
 
 
   /**
    * TODO
    */
-  bool isCloseToTarget(const geometry_msgs::PointStamped pos_in);
+  bool isCloseToTarget(const int target_class, const geometry_msgs::PointStamped pos_in);
 
 
   /**
