@@ -5,12 +5,12 @@ map_frame: "walrus/map"
 distance_threshold: 0.2
 confidence_threshold: 0.99
 distance_between_targets: 100.0
-bbox_pixel_padding: 100
+bbox_pixel_padding: 0
 bbox_edge_x: 0.1
 bbox_edge_y: 0.01
 robot_turning_threshold: 0.005
 sleep_period: 0.5
-object_classes: 
+object_classes:
   fire hydrant : '1'
   person: '2'
   motorbike: '3'

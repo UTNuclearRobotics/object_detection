@@ -571,7 +571,9 @@ namespace target_detection {
               new_detection.robot_tf = current_robot_tf_;
               new_detection.inv_camera_tf = current_inv_cam_tf_;
               new_detection.inv_robot_tf = current_inv_rob_tf_;
+              ROS_DEBUG_STREAM("BOX: " << box);
               new_detection.bbox = box;
+              ROS_DEBUG_STREAM("UTGT BOX: " << new_detection.bbox);
 
               tf2::doTransform(hypothesis.pose.pose.position, new_detection.position.point, current_inv_cam_tf_);
 
@@ -590,7 +592,7 @@ namespace target_detection {
     detected_objects_pub_.publish(detected_objects);
         
     auto t2 = debug_clock_.now();
-    ROS_ERROR_STREAM("TIME PCL2 CB: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+    ROS_DEBUG_STREAM("TIME PCL2 CB: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
 
   }
 
@@ -602,16 +604,19 @@ namespace target_detection {
 
     for (const TargetPoseEstimation::TargetDetection &tgt : target_detections_) {
       if (target_class != tgt.target_class){
+        ROS_DEBUG_STREAM("UTGT Does not match target class from TGT " << tgt.target_id);
+        ROS_DEBUG_STREAM("UTGT Class: " << target_class << " TGT Class: " << tgt.target_class);
         continue;
       }
 
       bool tgt_match {true};
       for (int i = 0; i < tgt.camera_tfs.size(); ++i) {
-        ROS_INFO_STREAM(tgt.camera_tfs[i]);
+        ROS_DEBUG("COMPARING LIDARS");
+        ROS_DEBUG_STREAM(tgt.camera_tfs[i]);
         sensor_msgs::PointCloud2 temp_cloud;
         tf2::doTransform(cloud_in, temp_cloud, tgt.camera_tfs[i]);
 
-        ROS_DEBUG("COMPARING LIDARS");
+        ROS_DEBUG_STREAM("BBOX " << tgt.bboxes[i].xmin << " " << tgt.bboxes[i].xmax << " " << tgt.bboxes[i].ymin << " " << tgt.bboxes[i].ymax);
 
         // Convert sensor_msgs::PointCloud2 to pcl::PointCloud
         TargetPoseEstimation::CloudPtr cloud(new TargetPoseEstimation::Cloud);
@@ -624,6 +629,7 @@ namespace target_detection {
         // if there's no overlapping points in the target bounding box then we know it isn't associated with this target
         if (cloud_in_bbox->empty()) {
             ROS_DEBUG("TGT NOT MATCHED");
+            ROS_DEBUG_STREAM("CLOUD IN BOX EMPTY FOR VIEW: " << (i + 1));
             tgt_match = false;
             break;
         }
@@ -686,7 +692,7 @@ namespace target_detection {
   /**
    * TODO
    */
-  int TargetPoseEstimation::updateRegisteredTarget(TargetPoseEstimation::UnassignedDetection utgt, const int tgt_index) {
+  void TargetPoseEstimation::updateRegisteredTarget(TargetPoseEstimation::UnassignedDetection utgt, const int tgt_index) {
     auto t1 = debug_clock_.now();
     
     // Before we start messing with the utgt cloud let's save the raw data into the tgt detections
@@ -705,10 +711,7 @@ namespace target_detection {
     TargetPoseEstimation::CloudPtr cloud_in_bbox = filterPointsInBox(cloud, pixel_coordinates, utgt.bbox.xmin, utgt.bbox.xmax, utgt.bbox.ymin, utgt.bbox.ymax);
 
     pcl::toROSMsg(*cloud_in_bbox, temp_cloud);
-
-    geometry_msgs::TransformStamped inv_cam_tf;
-    inv_cam_tf = invertTransform(utgt.camera_tf);
-    tf2::doTransform(temp_cloud, target_detections_[tgt_index].cloud, inv_cam_tf);
+    tf2::doTransform(temp_cloud, target_detections_[tgt_index].cloud, utgt.inv_camera_tf);
 
     // Filter new cloud down to all other bboxes
     for (int i = 0; i < target_detections_[tgt_index].camera_tfs.size(); ++i) {
@@ -722,8 +725,7 @@ namespace target_detection {
       pcl::toROSMsg(*cloud_in_bbox, temp_cloud);
 
       // need to transform back to map frame
-      inv_cam_tf = invertTransform(target_detections_[tgt_index].camera_tfs[i]);
-      tf2::doTransform(temp_cloud, utgt.cloud, inv_cam_tf);
+      tf2::doTransform(temp_cloud, utgt.cloud, target_detections_[tgt_index].inv_camera_tfs[i]);
 
     }
 
@@ -742,15 +744,18 @@ namespace target_detection {
     target_detections_[tgt_index].position.point.y = centroid[1];
     target_detections_[tgt_index].position.point.z = centroid[2];
     
+    target_detections_[tgt_index].bboxes.push_back(utgt.bbox);
     target_detections_[tgt_index].camera_tfs.push_back(utgt.camera_tf);
     target_detections_[tgt_index].robot_tfs.push_back(utgt.robot_tf);
+    target_detections_[tgt_index].inv_camera_tfs.push_back(utgt.inv_camera_tf);
+    target_detections_[tgt_index].inv_robot_tfs.push_back(utgt.inv_camera_tf);
 
     // debugging
     if (debug_viz_) {
       target_detections_[tgt_index].debug_pub.publish(target_detections_[tgt_index].cloud);
 
-      target_detections_[tgt_index].poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_pose" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
-      target_detections_[tgt_index].fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_fov_pc" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
+      target_detections_[tgt_index].poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>( ("tgt" + std::to_string(tgt_index + 1) + "_pose" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
+      target_detections_[tgt_index].fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(tgt_index + 1) + "_fov_pc" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
 
       geometry_msgs::PoseStamped temp_pose;
       temp_pose.header.stamp = ros::Time::now();

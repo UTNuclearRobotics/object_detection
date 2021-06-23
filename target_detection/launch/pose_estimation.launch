@@ -13,7 +13,7 @@
       <rosparam command="load" file="$(find target_detection)/config/pose_estimation.yaml" />
       <remap from="~camera_info" to="/camera/color/camera_info"/>
       <remap from="~bounding_boxes" to="/darknet_ros/bounding_boxes"/>
-      <remap from="~pointcloud" to="/sep_processing_node/lidar_fov"/>
+      <remap from="~pointcloud" to="/walrus/lidar_points"/>
     </node>
 
 

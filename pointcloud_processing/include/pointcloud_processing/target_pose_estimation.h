@@ -301,7 +301,7 @@ private:
   /**
    * TODO
    */
-  int updateRegisteredTarget(const TargetPoseEstimation::UnassignedDetection, const int tgt_index);
+  void updateRegisteredTarget(const TargetPoseEstimation::UnassignedDetection, const int tgt_index);
 };
 
 }
