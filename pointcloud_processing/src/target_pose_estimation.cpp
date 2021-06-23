@@ -39,17 +39,17 @@ namespace target_detection {
     camera_info_sub_ = private_nh_.subscribe("camera_info", 1, &TargetPoseEstimation::cameraInfoCb, this);
     detected_objects_pub_ = private_nh_.advertise<vision_msgs::Detection2DArray>("detected_objects", 1);
 
-    private_nh_.param<bool>("debug_lidar_viz", debug_lidar_viz_, true);
+    private_nh_.param<bool>("debug_viz", debug_viz_, true);
     private_nh_.param<std::string>("map_frame", map_frame_, "map");
     private_nh_.param<std::string>("robot_frame", robot_frame_, "base_link");
     private_nh_.param<std::string>("camera_optical_frame", camera_optical_frame_, "camera_optical_link");
 
-    ROS_INFO_STREAM("DEBUG PARAM: " << debug_lidar_viz_);
-    ROS_INFO_STREAM("MAP FRAME PARAM: " << map_frame_);
-    ROS_INFO_STREAM("ROBOT FRAME PARAM: " << robot_frame_);
-    ROS_INFO_STREAM("CAMERA OPT FRAME PARAM: " << camera_optical_frame_);
+    ROS_DEBUG_STREAM("DEBUG PARAM: " << debug_viz_);
+    ROS_DEBUG_STREAM("MAP FRAME PARAM: " << map_frame_);
+    ROS_DEBUG_STREAM("ROBOT FRAME PARAM: " << robot_frame_);
+    ROS_DEBUG_STREAM("CAMERA OPT FRAME PARAM: " << camera_optical_frame_);
 
-    if (debug_lidar_viz_) {
+    if (debug_viz_) {
         lidar_fov_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("lidar_fov", 1);
         lidar_bbox_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("lidar_bbox", 1);
         utgt_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("utgt", 1, true);
@@ -65,14 +65,12 @@ namespace target_detection {
    */
   void TargetPoseEstimation::initiateDetections() {
 
-    ROS_INFO("INITIATE DETS");
-    double robot_movement_threshold;
+    ROS_DEBUG("INITIATE DETS");
+    double robot_movement_threshold, robot_turning_threshold, sleeper;
     private_nh_.param<double>("robot_movement_threshold", robot_movement_threshold, 2.0);
-    ROS_INFO_STREAM("MOVEMENT THRESH PARAM: " << robot_movement_threshold);
-
-    double robot_turning_threshold;
     private_nh_.param<double>("robot_turning_threshold", robot_turning_threshold, 0.1);
-    ROS_INFO_STREAM("MOVEMENT THRESH PARAM: " << robot_turning_threshold);
+    private_nh_.param<double>("sleep_period", sleeper, 0.1);
+
 
     // init robot pose to map origin
     current_robot_tf_.transform.translation.x = 0;
@@ -88,10 +86,13 @@ namespace target_detection {
 
       current_robot_tf_ = updateTf(robot_frame_, map_frame_);
       current_camera_tf_ = updateTf(camera_optical_frame_, map_frame_);
+      current_inv_rob_tf_ = updateTf(map_frame_, robot_frame_);
+      current_inv_cam_tf_ = updateTf(map_frame_, camera_optical_frame_);
+
 
       // if robot hasn't moved beyond threshold then do nothing
       if (!robotHasMoved(robot_movement_threshold)) {
-        ROS_INFO_THROTTLE(15.0, "ROBOT HAS NOT MOVED BEYOND THRESH");
+        ROS_DEBUG_THROTTLE(15.0, "ROBOT HAS NOT MOVED BEYOND THRESH");
         continue;
       }
       
@@ -101,9 +102,11 @@ namespace target_detection {
       while (ros::ok() && unassigned_detections_.size() == 0) {
         auto t1 = debug_clock_.now();
         prev_robot_tf_ = current_robot_tf_;
-        ros::Duration(0.2).sleep();
+        ros::Duration(sleeper).sleep();
         current_robot_tf_ = updateTf(robot_frame_, map_frame_);
         current_camera_tf_ = updateTf(camera_optical_frame_, map_frame_);
+        current_inv_rob_tf_ = updateTf(map_frame_, robot_frame_);
+        current_inv_cam_tf_ = updateTf(map_frame_, camera_optical_frame_);
         if (robotIsTurning(robot_turning_threshold)) {
           continue;
         }
@@ -112,11 +115,11 @@ namespace target_detection {
         // ROS_ERROR_STREAM("TIME SPIN: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
       }
 
-      ROS_INFO("SHOULD HAVE UNASSIGNED TARGETS NOW");
+      ROS_DEBUG("SHOULD HAVE UNASSIGNED TARGETS NOW");
 
       // once we have unassigned target detections need to process target comparisons
       if (target_detections_.size() > 0) {
-        ROS_INFO("CHECKING EXISTING TGTS");
+        ROS_DEBUG("CHECKING EXISTING TGTS");
         auto utgt = unassigned_detections_.begin();
 
         auto t1 = debug_clock_.now();
@@ -125,11 +128,11 @@ namespace target_detection {
           
           // if the unassigned detection is associated with a known target then must add the data and update new existing target info
           if (const int tgt_id = isRegisteredTarget(utgt->target_class, utgt->cloud)) {
-            ROS_INFO("REGISTERED UTGT TO TGT!!!");
+            ROS_INFO("Registered current view to existing target");
             updateRegisteredTarget(*utgt, (tgt_id - 1));
             utgt = unassigned_detections_.erase(utgt);
           } else if (isCloseToTarget(utgt->target_class, utgt->position)) {
-            ROS_INFO("UTGT IS CLOSE TO A TGT BUT NOT OVERLAPPING PC DATA LET'S IGNORE FOR NOW!!!");
+            ROS_INFO("Target is seen but there is the FOV does not perfectly overlap with previous FOV's.  Ignoring current view.");
             utgt = unassigned_detections_.erase(utgt);
           } else {
             ++utgt;
@@ -137,14 +140,14 @@ namespace target_detection {
         }
         auto t2 = debug_clock_.now();
 
-        ROS_ERROR_STREAM("TIME TO CHECK UTGTS: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+        ROS_DEBUG_STREAM("TIME TO CHECK UTGTS: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
       } 
 
       // if we still have unassigned detections then we assign them as new targets
       if (unassigned_detections_.size() > 0) {
         auto t1 = debug_clock_.now();
 
-        ROS_INFO("ASSIGNING NEW TGTS");
+        ROS_INFO("Assigning new target(s)");
         for (const TargetPoseEstimation::UnassignedDetection &utgt : unassigned_detections_) {
           TargetPoseEstimation::TargetDetection new_tgt;
           new_tgt.target_class = utgt.target_class;
@@ -155,12 +158,31 @@ namespace target_detection {
           new_tgt.fov_clouds.push_back(utgt.cloud);
           new_tgt.robot_tfs.push_back(current_robot_tf_);
           new_tgt.camera_tfs.push_back(current_camera_tf_);
+          new_tgt.inv_robot_tfs.push_back(current_inv_rob_tf_);
+          new_tgt.inv_camera_tfs.push_back(current_inv_cam_tf_);
 
-          if (debug_lidar_viz_) {
+          if (debug_viz_) {
+            // debugging
+            new_tgt.poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_pose1"), 1, true));
+            new_tgt.fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_fov_pc1"), 1, true));
+
+            geometry_msgs::PoseStamped temp_pose;
+            temp_pose.header.stamp = ros::Time::now();
+            temp_pose.header.frame_id = map_frame_;
+            temp_pose.pose.position.x = new_tgt.inv_camera_tfs[new_tgt.inv_camera_tfs.size() - 1].transform.translation.x;
+            temp_pose.pose.position.y = new_tgt.inv_camera_tfs[new_tgt.inv_camera_tfs.size() - 1].transform.translation.y;
+            temp_pose.pose.position.z = new_tgt.inv_camera_tfs[new_tgt.inv_camera_tfs.size() - 1].transform.translation.z;
+            temp_pose.pose.orientation.x = new_tgt.inv_camera_tfs[new_tgt.inv_camera_tfs.size() - 1].transform.rotation.x;
+            temp_pose.pose.orientation.y = new_tgt.inv_camera_tfs[new_tgt.inv_camera_tfs.size() - 1].transform.rotation.y;
+            temp_pose.pose.orientation.z = new_tgt.inv_camera_tfs[new_tgt.inv_camera_tfs.size() - 1].transform.rotation.z;
+            temp_pose.pose.orientation.w = new_tgt.inv_camera_tfs[new_tgt.inv_camera_tfs.size() - 1].transform.rotation.w;
+            new_tgt.poses_puber[0].publish(temp_pose);
+            new_tgt.fov_pc_puber[0].publish(new_tgt.fov_clouds[0]);
+
             new_tgt.debug_pub = nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1)), 1, true);
 
-            ROS_INFO_STREAM("PUBLISHING NEW TGT");
-            ROS_INFO_STREAM(new_tgt.cloud.header);
+            ROS_DEBUG_STREAM("PUBLISHING NEW TGT");
+            ROS_DEBUG_STREAM(new_tgt.cloud.header);
             new_tgt.debug_pub.publish(new_tgt.cloud);
           }
           target_detections_.push_back(new_tgt);
@@ -168,11 +190,9 @@ namespace target_detection {
 
         unassigned_detections_.clear();
         auto t2 = debug_clock_.now();
-        ROS_ERROR_STREAM("TIME ASSIGN NEW TGTS: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+        ROS_DEBUG_STREAM("TIME ASSIGN NEW TGTS: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
 
       }
-
-      // ROS_INFO_STREAM(target_detections_);
     }
   }
 
@@ -225,11 +245,6 @@ namespace target_detection {
    */
   bool TargetPoseEstimation::robotHasMoved(const double robot_movement_threshold) {
     
-    // double xc = current_robot_tf_.transform.translation.x;
-    // double yc = current_robot_tf_.transform.translation.y;
-    // double xp = prev_robot_tf_.transform.translation.x;
-    // double yp = prev_robot_tf_.transform.translation.y;
-    // ROS_INFO_STREAM("Xc " << xc << " Xp " << xp << "Yc " << yc << " Yp " << yp << " dist " << ( (xc-xp) * (xc-xp) + (yc-yp) * (yc-yp)));
     if ( (current_robot_tf_.transform.translation.x - prev_robot_tf_.transform.translation.x) * (current_robot_tf_.transform.translation.x - prev_robot_tf_.transform.translation.x)
           + (current_robot_tf_.transform.translation.y - prev_robot_tf_.transform.translation.y) * (current_robot_tf_.transform.translation.y - prev_robot_tf_.transform.translation.y)
           > (robot_movement_threshold * robot_movement_threshold) ) {
@@ -254,10 +269,10 @@ namespace target_detection {
     tf2::fromMsg(prev_robot_tf_.transform.rotation, qt2);
     double angle = qt1.angleShortestPath(qt2);
     if (angle > robot_turning_threshold) {
-      ROS_ERROR_STREAM("ROBOT TURNING: " << angle);
+      ROS_DEBUG_STREAM("ROBOT TURNING: " << angle);
       return true;
     } else {
-      ROS_ERROR_STREAM("ROBOT NOT TURNING: " << angle);
+      ROS_DEBUG_STREAM("ROBOT NOT TURNING: " << angle);
       return false;
     }
   }
@@ -281,7 +296,7 @@ namespace target_detection {
       result.z = point.z;
       auto t2 = debug_clock_.now();
       if (std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count() > 1) {
-        ROS_ERROR_STREAM("TIME POSE TO PIXEL: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+        ROS_DEBUG_STREAM("TIME POSE TO PIXEL: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
       }
       return result;
   }
@@ -307,7 +322,7 @@ namespace target_detection {
       auto t2 = debug_clock_.now();
       // std::chrono::duration_cast<std::chrono::milliseconds> tme = t2 - t1;
       if (std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count() > 1) {
-        ROS_ERROR_STREAM("TIME CONVERT CLOUD TO PIXELS: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+        ROS_DEBUG_STREAM("TIME CONVERT CLOUD TO PIXELS: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
       }
       return output;
   }
@@ -343,56 +358,6 @@ namespace target_detection {
       }
 
       return output;
-  }
-
-
-  /**
-   * @brief Extract from a pointcloud those points that are within the FoV of the camera.
-   * @param input The input pointcloud
-   * @param pixel_coordinates A vector of pixelspace coordinates. These correspond by index
-   *                          with the points ins input
-   * @param height The pixel height of the camera
-   * @param width The pixel width of the camera
-   * @return A pointcloud containing only the points within the camera FoV.
-   */
-  TargetPoseEstimation::CloudPtr TargetPoseEstimation::filterPointsInFoV(const TargetPoseEstimation::CloudPtr input,
-                            const std::vector<TargetPoseEstimation::PixelCoords> &pixel_coordinates,
-                            const int height,
-                            const int width) {
-      auto t1 = debug_clock_.now();
-      pcl::PointIndices::Ptr indices_in_fov(new pcl::PointIndices());
-      indices_in_fov->indices.reserve(input->size());
-
-      for (int i = 0; i < pixel_coordinates.size(); ++i) {
-          if (pixel_coordinates[i].z > 0 &&
-              pixel_coordinates[i].x >= 0 &&
-              pixel_coordinates[i].x <= width &&
-              pixel_coordinates[i].y >= 0 &&
-              pixel_coordinates[i].y <= height)
-          {
-              indices_in_fov->indices.push_back(i);
-          }
-      }
-
-      TargetPoseEstimation::CloudPtr cloud_in_fov(new TargetPoseEstimation::Cloud);
-      pcl::ExtractIndices<TargetPoseEstimation::PointType> camera_fov_filter;
-
-      // Extract the inliers  of the ROI
-      camera_fov_filter.setInputCloud(input);
-      camera_fov_filter.setIndices(indices_in_fov);
-      camera_fov_filter.setNegative(false);
-      camera_fov_filter.filter(*cloud_in_fov);
-
-      if (debug_lidar_viz_) {
-          sensor_msgs::PointCloud2 pc2;
-          pcl::toROSMsg(*cloud_in_fov, pc2);
-          lidar_fov_pub_.publish(pc2);
-      }
-      auto t2 = debug_clock_.now();
-      if (std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count() > 1) {
-        ROS_ERROR_STREAM("TIME FILTER POINTS IN FOV: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
-      }
-      return cloud_in_fov;
   }
 
 
@@ -441,15 +406,9 @@ namespace target_detection {
       bbox_filter.setNegative(false);
       bbox_filter.filter(*cloud_in_bbox);
 
-      // if (debug_lidar_viz_) {
-      //     sensor_msgs::PointCloud2 pc2;
-      //     pcl::toROSMsg(*cloud_in_bbox, pc2);
-      //     lidar_bbox_pub_.publish(pc2);
-      // }
-
       auto t2 = debug_clock_.now();
       if (std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count() > 1) {
-        ROS_ERROR_STREAM("TIME FILTER POINTS IN BOX: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+        ROS_DEBUG_STREAM("TIME FILTER POINTS IN BOX: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
       }
       return cloud_in_bbox;
   }
@@ -470,8 +429,21 @@ namespace target_detection {
       tf2::doTransform(pointcloud, pointcloud, transform);
       
       auto t2 = debug_clock_.now();
-      ROS_ERROR_STREAM("TIME TF PC: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+      ROS_DEBUG_STREAM("TIME TF PC: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
       return true;
+  }
+
+  geometry_msgs::TransformStamped TargetPoseEstimation::invertTransform(const geometry_msgs::TransformStamped &tf_in) {
+    
+    tf2::Stamped<tf2::Transform> temp_tf;
+    tf2::fromMsg(tf_in, temp_tf);
+    geometry_msgs::TransformStamped inv_tf; 
+    inv_tf.transform = tf2::toMsg(temp_tf.inverse());
+    inv_tf.header.stamp = ros::Time::now();
+    inv_tf.header.frame_id = tf_in.child_frame_id;
+    inv_tf.child_frame_id = tf_in.header.frame_id;
+
+    return inv_tf;
   }
 
 
@@ -482,7 +454,7 @@ namespace target_detection {
    */
   void TargetPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud) {
       auto t1 = debug_clock_.now();
-    
+
       // check that we've received bounding boxes
       if (current_boxes_.bounding_boxes.empty()) {
           return;
@@ -509,25 +481,10 @@ namespace target_detection {
       TargetPoseEstimation::CloudPtr cloud(new TargetPoseEstimation::Cloud);
       pcl::fromROSMsg(input_cloud, *cloud);
 
-      // Initialize container for inliers of the ROI
-      // pcl::PointIndices::Ptr inliers_camera_fov(new pcl::PointIndices());
-
       // remove NaN points from the cloud
       TargetPoseEstimation::CloudPtr cloud_nan_filtered(new TargetPoseEstimation::Cloud);
-      // TargetPoseEstimation::CloudPtr nanfiltered_cloud(new TargetPoseEstimation::Cloud);
       std::vector<int> rindices;
       pcl::removeNaNFromPointCloud(*cloud, *cloud_nan_filtered, rindices);
-
-      // produce pixel-space coordinates
-      // const std::vector<TargetPoseEstimation::PixelCoords> pixel_coordinates = convertCloudToPixelCoords(cloud_nan_filtered, camera_info_);
-
-      // -------------------Extraction of points in the camera FOV------------------------------
-      // TargetPoseEstimation::CloudPtr cloud_fov = filterPointsInFoV(cloud_nan_filtered, pixel_coordinates, camera_info_.height, camera_info_.width);
-
-      // if (cloud_fov->empty()) {
-      //     ROS_WARN("No pointcloud data found within the camera field of view.");
-      //     return;
-      // }
 
       // output
       vision_msgs::Detection2DArray detected_objects;
@@ -553,20 +510,20 @@ namespace target_detection {
 
             // check for bounding boxes being close to edges
             if (box.xmin < camera_info_.width * bbox_edge_x) {
-              ROS_ERROR("BBOX EDGE LEFT");
+              ROS_DEBUG("BBOX EDGE LEFT");
               continue;
             }
             if (box.xmax > (camera_info_.width - (camera_info_.width * bbox_edge_x)) ) {
-              ROS_ERROR("BBOX EDGE RIGHT");
+              ROS_DEBUG("BBOX EDGE RIGHT");
               continue;
             }
 
             if (box.ymin < camera_info_.height * bbox_edge_y) {
-              ROS_ERROR("BBOX EDGE TOP");
+              ROS_DEBUG("BBOX EDGE TOP");
               continue;
             }
             if (box.ymax > (camera_info_.height - (camera_info_.height * bbox_edge_y)) ) {
-              ROS_ERROR("BBOX EDGE BOTTOM");
+              ROS_DEBUG("BBOX EDGE BOTTOM");
               continue;
             }
 
@@ -612,23 +569,17 @@ namespace target_detection {
               new_detection.cloud = tgt_cloud;
               new_detection.camera_tf = current_camera_tf_;
               new_detection.robot_tf = current_robot_tf_;
+              new_detection.inv_camera_tf = current_inv_cam_tf_;
+              new_detection.inv_robot_tf = current_inv_rob_tf_;
               new_detection.bbox = box;
-              ROS_INFO("UTGT!!!");
 
-              tf2::Stamped<tf2::Transform> temp_tf;
-              tf2::fromMsg(current_camera_tf_, temp_tf);
-              geometry_msgs::TransformStamped inv_cam_tf; 
-              inv_cam_tf.transform = tf2::toMsg(temp_tf.inverse());
-              inv_cam_tf.header.stamp = ros::Time::now();
-              inv_cam_tf.header.frame_id = map_frame_;
-              inv_cam_tf.child_frame_id = camera_optical_frame_;
-              tf2::doTransform(hypothesis.pose.pose.position, new_detection.position.point, inv_cam_tf);
+              tf2::doTransform(hypothesis.pose.pose.position, new_detection.position.point, current_inv_cam_tf_);
 
-              if (debug_lidar_viz_) {
+              if (debug_viz_) {
 
-                ROS_INFO_STREAM("PUBING UTGT");
-                ROS_INFO_STREAM(new_detection.cloud.header);
-                // utgt_pub_.publish(new_detection.cloud);
+                ROS_DEBUG_STREAM("PUBING UTGT");
+                ROS_DEBUG_STREAM(new_detection.cloud.header);
+                utgt_pub_.publish(new_detection.cloud);
               }
 
               unassigned_detections_.push_back(new_detection);
@@ -649,10 +600,6 @@ namespace target_detection {
   int TargetPoseEstimation::isRegisteredTarget(const int target_class, sensor_msgs::PointCloud2 cloud_in) {
     auto t1 = debug_clock_.now();
 
-    if (debug_lidar_viz_) {
-      utgt_pub_.publish(cloud_in);
-    }
-
     for (const TargetPoseEstimation::TargetDetection &tgt : target_detections_) {
       if (target_class != tgt.target_class){
         continue;
@@ -664,8 +611,7 @@ namespace target_detection {
         sensor_msgs::PointCloud2 temp_cloud;
         tf2::doTransform(cloud_in, temp_cloud, tgt.camera_tfs[i]);
 
-        ROS_WARN("COMPARING LIDARS");
-        lidar_bbox_pub_.publish(temp_cloud);
+        ROS_DEBUG("COMPARING LIDARS");
 
         // Convert sensor_msgs::PointCloud2 to pcl::PointCloud
         TargetPoseEstimation::CloudPtr cloud(new TargetPoseEstimation::Cloud);
@@ -677,7 +623,7 @@ namespace target_detection {
 
         // if there's no overlapping points in the target bounding box then we know it isn't associated with this target
         if (cloud_in_bbox->empty()) {
-            ROS_WARN("TGT NOT MATCHED");
+            ROS_DEBUG("TGT NOT MATCHED");
             tgt_match = false;
             break;
         }
@@ -685,15 +631,15 @@ namespace target_detection {
 
       // if we made it through the last loop without breaking then it is a tgt match and return the associated target
       if (tgt_match) {
-        ROS_INFO_STREAM("TGT MATCHED TO: " << tgt.target_id);
+        ROS_DEBUG_STREAM("TGT MATCHED TO: " << tgt.target_id);
         auto t2 = debug_clock_.now();
-        ROS_ERROR_STREAM("TIME IS REGISTERED TGT: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+        ROS_DEBUG_STREAM("TIME IS REGISTERED TGT: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
 
         return tgt.target_id;
       }
     }
     auto t2 = debug_clock_.now();
-    ROS_ERROR_STREAM("TIME IS REGISTERED TGT: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+    ROS_DEBUG_STREAM("TIME IS REGISTERED TGT: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
     return 0;
   }
 
@@ -704,7 +650,7 @@ namespace target_detection {
   bool TargetPoseEstimation::isCloseToTarget(const int target_class, const geometry_msgs::PointStamped pos_in) {
     auto t1 = debug_clock_.now();
 
-    ROS_WARN("COMPARING TGT CLOSNESS");
+    ROS_DEBUG("COMPARING TGT CLOSNESS");
 
     for (const TargetPoseEstimation::TargetDetection &tgt : target_detections_) {
       if (target_class != tgt.target_class){
@@ -713,26 +659,26 @@ namespace target_detection {
 
       double dist_check;
       private_nh_.param<double>("distance_between_targets", dist_check, 10.0);
-      ROS_INFO_STREAM("DISTANCE TGTS PARAM: " << dist_check);
+      ROS_DEBUG_STREAM("DISTANCE TGTS PARAM: " << dist_check);
 
       double xc = tgt.position.point.x;
       double yc = tgt.position.point.y;
       double xp = pos_in.point.x;
       double yp = pos_in.point.y;
-      ROS_INFO_STREAM("Xc " << xc << " Xp " << xp << "Yc " << yc << " Yp " << yp << " dist " << ( (xc-xp) * (xc-xp) + (yc-yp) * (yc-yp)));
+      ROS_DEBUG_STREAM("Xc " << xc << " Xp " << xp << "Yc " << yc << " Yp " << yp << " dist " << ( (xc-xp) * (xc-xp) + (yc-yp) * (yc-yp)));
 
       if ( (tgt.position.point.x - pos_in.point.x) * (tgt.position.point.x - pos_in.point.x)
             + (tgt.position.point.y - pos_in.point.y) * (tgt.position.point.y - pos_in.point.y)
             < (dist_check * dist_check) ) {
 
         auto t2 = debug_clock_.now();
-        ROS_ERROR_STREAM("TIME IS CLOSE TGT: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+        ROS_DEBUG_STREAM("TIME IS CLOSE TGT: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
         return true;
       }
     }
     
     auto t2 = debug_clock_.now();
-    ROS_ERROR_STREAM("TIME IS CLOSE TGT: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+    ROS_DEBUG_STREAM("TIME IS CLOSE TGT: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
     return false;
   }
 
@@ -760,13 +706,8 @@ namespace target_detection {
 
     pcl::toROSMsg(*cloud_in_bbox, temp_cloud);
 
-    tf2::Stamped<tf2::Transform> temp_tf;
-    tf2::fromMsg(utgt.camera_tf, temp_tf);
-    geometry_msgs::TransformStamped inv_cam_tf; 
-    inv_cam_tf.transform = tf2::toMsg(temp_tf.inverse());
-    inv_cam_tf.header.stamp = ros::Time::now();
-    inv_cam_tf.header.frame_id = map_frame_;
-    inv_cam_tf.child_frame_id = camera_optical_frame_;
+    geometry_msgs::TransformStamped inv_cam_tf;
+    inv_cam_tf = invertTransform(utgt.camera_tf);
     tf2::doTransform(temp_cloud, target_detections_[tgt_index].cloud, inv_cam_tf);
 
     // Filter new cloud down to all other bboxes
@@ -781,11 +722,7 @@ namespace target_detection {
       pcl::toROSMsg(*cloud_in_bbox, temp_cloud);
 
       // need to transform back to map frame
-      tf2::fromMsg(target_detections_[tgt_index].camera_tfs[i], temp_tf);
-      inv_cam_tf.transform = tf2::toMsg(temp_tf.inverse());
-      inv_cam_tf.header.stamp = ros::Time::now();
-      inv_cam_tf.header.frame_id = map_frame_;
-      inv_cam_tf.child_frame_id = camera_optical_frame_;
+      inv_cam_tf = invertTransform(target_detections_[tgt_index].camera_tfs[i]);
       tf2::doTransform(temp_cloud, utgt.cloud, inv_cam_tf);
 
     }
@@ -808,12 +745,29 @@ namespace target_detection {
     target_detections_[tgt_index].camera_tfs.push_back(utgt.camera_tf);
     target_detections_[tgt_index].robot_tfs.push_back(utgt.robot_tf);
 
-    if (debug_lidar_viz_) {
+    // debugging
+    if (debug_viz_) {
       target_detections_[tgt_index].debug_pub.publish(target_detections_[tgt_index].cloud);
+
+      target_detections_[tgt_index].poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_pose" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
+      target_detections_[tgt_index].fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_fov_pc" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
+
+      geometry_msgs::PoseStamped temp_pose;
+      temp_pose.header.stamp = ros::Time::now();
+      temp_pose.header.frame_id = map_frame_;
+      temp_pose.pose.position.x = current_inv_cam_tf_.transform.translation.x;
+      temp_pose.pose.position.y = current_inv_cam_tf_.transform.translation.y;
+      temp_pose.pose.position.z = current_inv_cam_tf_.transform.translation.z;
+      temp_pose.pose.orientation.x = current_inv_cam_tf_.transform.rotation.x;
+      temp_pose.pose.orientation.y = current_inv_cam_tf_.transform.rotation.y;
+      temp_pose.pose.orientation.z = current_inv_cam_tf_.transform.rotation.z;
+      temp_pose.pose.orientation.w = current_inv_cam_tf_.transform.rotation.w;
+      target_detections_[tgt_index].poses_puber[target_detections_[tgt_index].poses_puber.size() - 1].publish(temp_pose);
+      target_detections_[tgt_index].fov_pc_puber[target_detections_[tgt_index].fov_pc_puber.size() - 1].publish(target_detections_[tgt_index].fov_clouds[target_detections_[tgt_index].fov_clouds.size() - 1]);
     }
-    
+
     auto t2 = debug_clock_.now();
-    ROS_ERROR_STREAM("TIME UPDATE TGT PC: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+    ROS_DEBUG_STREAM("TIME UPDATE TGT PC: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
 
   }
 }

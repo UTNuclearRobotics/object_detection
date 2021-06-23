@@ -37,6 +37,7 @@
 #include <vision_msgs/Detection2DArray.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/PoseStamped.h>
 
 // Darknet detection
 #include <darknet_ros_msgs/BoundingBoxes.h>
@@ -118,6 +119,8 @@ private:
     geometry_msgs::PointStamped position; // should be in map frame
     geometry_msgs::TransformStamped robot_tf;
     geometry_msgs::TransformStamped camera_tf;
+    geometry_msgs::TransformStamped inv_robot_tf;
+    geometry_msgs::TransformStamped inv_camera_tf;
     darknet_ros_msgs::BoundingBox bbox;
 
     // ros::Publisher debug_pub;
@@ -133,13 +136,18 @@ private:
     std::vector<sensor_msgs::PointCloud2> fov_clouds; // these clouds must be saved in the map frame
     std::vector<geometry_msgs::TransformStamped> robot_tfs;
     std::vector<geometry_msgs::TransformStamped> camera_tfs;
+    std::vector<geometry_msgs::TransformStamped> inv_robot_tfs;
+    std::vector<geometry_msgs::TransformStamped> inv_camera_tfs;
 
     ros::Publisher debug_pub;
+    std::vector<ros::Publisher> poses_puber;
+    std::vector<ros::Publisher> fov_pc_puber;
+    std::vector<ros::Publisher> view_puber;
   } TargetDetection;
 
   // class variables
-  bool debug_lidar_viz_;
-  geometry_msgs::TransformStamped current_robot_tf_, current_camera_tf_, prev_robot_tf_;
+  bool debug_viz_;
+  geometry_msgs::TransformStamped current_robot_tf_, current_camera_tf_, prev_robot_tf_, current_inv_cam_tf_, current_inv_rob_tf_;
 
   // the optical frame of the RGB camera (not the camera base frame)
   std::string camera_optical_frame_, map_frame_, robot_frame_;
@@ -247,21 +255,6 @@ private:
 
 
   /**
-   * @brief Extract from a pointcloud those points that are within the FoV of the camera.
-   * @param input The input pointcloud
-   * @param pixel_coordinates A vector of pixelspace coordinates. These correspond by index
-   *                          with the points ins input
-   * @param height The pixel height of the camera
-   * @param width The pixel width of the camera
-   * @return A pointcloud containing only the points within the camera FoV.
-   */
-  CloudPtr filterPointsInFoV(const CloudPtr input,
-                            const std::vector<PixelCoords> &pixel_coordinates,
-                            const int height,
-                            const int width);
-
-
-  /**
    * @brief Extract from a pointcloud those points that are within a rectangular bounding box.
    * @param input The input pointcloud
    * @param pixel_coordinates A vector of pixelspace coordinates. These correspond by index
@@ -283,6 +276,7 @@ private:
   bool transformPointCloud2(sensor_msgs::PointCloud2 &pointcloud,
                             const std::string target_frame);
 
+  geometry_msgs::TransformStamped invertTransform(const geometry_msgs::TransformStamped &tf_ins);
 
   /**
    * @brief Callback function for the pointclouds
