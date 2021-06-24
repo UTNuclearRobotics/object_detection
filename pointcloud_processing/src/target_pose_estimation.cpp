@@ -37,7 +37,7 @@ namespace target_detection {
     bbox_sub_ = private_nh_.subscribe("bounding_boxes", 1, &TargetPoseEstimation::bBoxCb, this);
     cloud_sub_ = private_nh_.subscribe("pointcloud", 1, &TargetPoseEstimation::pointCloudCb, this); 
     camera_info_sub_ = private_nh_.subscribe("camera_info", 1, &TargetPoseEstimation::cameraInfoCb, this);
-    detected_objects_pub_ = private_nh_.advertise<vision_msgs::Detection2DArray>("detected_objects", 1);
+    detected_objects_pub_ = private_nh_.advertise<vision_msgs::Detection3DArray>("detected_objects", 1);
 
     private_nh_.param<bool>("debug_viz", debug_viz_, true);
     private_nh_.param<std::string>("map_frame", map_frame_, "map");
@@ -50,8 +50,6 @@ namespace target_detection {
     ROS_DEBUG_STREAM("CAMERA OPT FRAME PARAM: " << camera_optical_frame_);
 
     if (debug_viz_) {
-        lidar_fov_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("lidar_fov", 1);
-        lidar_bbox_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("lidar_bbox", 1);
         utgt_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("utgt", 1, true);
     }
   }
@@ -61,16 +59,16 @@ namespace target_detection {
 
 
   /**
-   * TODO
+   * @brief Runs all of the top level detection code.  Initiates and manages the target detection demo
    */
   void TargetPoseEstimation::initiateDetections() {
 
     ROS_DEBUG("INITIATE DETS");
-    double robot_movement_threshold, robot_turning_threshold, sleeper;
+    double robot_movement_threshold, robot_turning_threshold, sleeper, dist_check;
     private_nh_.param<double>("robot_movement_threshold", robot_movement_threshold, 2.0);
     private_nh_.param<double>("robot_turning_threshold", robot_turning_threshold, 0.1);
     private_nh_.param<double>("sleep_period", sleeper, 0.1);
-
+    private_nh_.param<double>("distance_between_targets", dist_check, 10.0);
 
     // init robot pose to map origin
     current_robot_tf_.transform.translation.x = 0;
@@ -83,12 +81,10 @@ namespace target_detection {
     prev_robot_tf_ = current_robot_tf_;
 
     while (ros::ok()) {
-
       current_robot_tf_ = updateTf(robot_frame_, map_frame_);
       current_camera_tf_ = updateTf(camera_optical_frame_, map_frame_);
       current_inv_rob_tf_ = updateTf(map_frame_, robot_frame_);
       current_inv_cam_tf_ = updateTf(map_frame_, camera_optical_frame_);
-
 
       // if robot hasn't moved beyond threshold then do nothing
       if (!robotHasMoved(robot_movement_threshold)) {
@@ -102,18 +98,21 @@ namespace target_detection {
       while (ros::ok() && unassigned_detections_.size() == 0) {
         auto t1 = debug_clock_.now();
         prev_robot_tf_ = current_robot_tf_;
+
         ros::Duration(sleeper).sleep();
+
         current_robot_tf_ = updateTf(robot_frame_, map_frame_);
         current_camera_tf_ = updateTf(camera_optical_frame_, map_frame_);
-        if (!lidar_frame_.empty()) {current_lidar_tf_ = updateTf(camera_optical_frame_, lidar_frame_);}
         current_inv_rob_tf_ = updateTf(map_frame_, robot_frame_);
         current_inv_cam_tf_ = updateTf(map_frame_, camera_optical_frame_);
+        if (!lidar_frame_.empty()) {current_lidar_tf_ = updateTf(camera_optical_frame_, lidar_frame_);}
+
         if (robotIsTurning(robot_turning_threshold)) {
           continue;
         }
         ros::spinOnce();
         auto t2 = debug_clock_.now();
-        ROS_DEBUG_STREAM("TIME SPIN: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+        // ROS_DEBUG_STREAM("TIME SPIN: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
       }
 
       ROS_DEBUG("SHOULD HAVE UNASSIGNED TARGETS NOW");
@@ -130,10 +129,14 @@ namespace target_detection {
           if (const int tgt_id = isRegisteredTarget(utgt->target_class, utgt->cloud)) {
             ROS_INFO_STREAM("Registered current view to existing target: " << tgt_id << " (" << utgt->target_class << ")");
             updateRegisteredTarget(*utgt, (tgt_id - 1));
+
+            // publish results now that a target has been updated
+            publishDetectionArray();
+
             utgt = unassigned_detections_.erase(utgt);
 
           // if we find have a detection of the same type that does not overlap with previous views but it really close then let's assume it is the same target and wait for a better view 
-          } else if (const int tgt_id = isCloseToTarget(utgt->target_class, utgt->position)) {
+          } else if (const int tgt_id = isCloseToTarget(utgt->target_class, utgt->position, dist_check)) {
             ROS_INFO_STREAM("Target " << tgt_id <<  " (" << utgt->target_class << ") " << "is seen but the new FOV does not overlap with at least one of the previous FOV's.  Ignoring current view.");
             utgt = unassigned_detections_.erase(utgt);
 
@@ -192,6 +195,9 @@ namespace target_detection {
             new_tgt.con_lidar_pub.publish(new_tgt.cloud);
           }
           target_detections_.push_back(new_tgt);
+    
+          // publish results now that a target has been added
+          publishDetectionArray();
         }
 
         unassigned_detections_.clear();
@@ -500,12 +506,6 @@ namespace target_detection {
     std::vector<int> rindices;
     pcl::removeNaNFromPointCloud(*cloud, *cloud_nan_filtered, rindices);
 
-    // output
-    vision_msgs::Detection2DArray detected_objects;
-    detected_objects.header.stamp = now;
-    detected_objects.header.frame_id = input_cloud.header.frame_id;
-    detected_objects.detections.reserve(current_boxes_.bounding_boxes.size());
-
     // produce pixel-space coordinates
     const std::vector<TargetPoseEstimation::PixelCoords> pixel_coordinates = convertCloudToPixelCoords(cloud_nan_filtered, camera_info_);
 
@@ -520,7 +520,6 @@ namespace target_detection {
 
         // do we meet the threshold for a confirmed detection?
         if (box.probability >= confidence_threshold && id != UNKNOWN_OBJECT_ID) {
-
 
           // check for bounding boxes being close to edges
           if (box.xmin < camera_info_.width * bbox_edge_x) {
@@ -552,25 +551,10 @@ namespace target_detection {
             // ----------------------Compute centroid-----------------------------
             Eigen::Vector4f centroid_out;
             pcl::compute3DCentroid(*cloud_in_bbox, centroid_out);
-
-            // add to the output
-            vision_msgs::Detection2D object;
-            object.bbox.center.x = (box.xmax + box.xmin)/2;
-            object.bbox.center.y = (box.ymax + box.ymin)/2;
-            object.bbox.size_x = box.xmax - box.xmin;
-            object.bbox.size_y = box.ymax - box.ymin;
-
-            vision_msgs::ObjectHypothesisWithPose hypothesis;
-            hypothesis.id = id;
-            hypothesis.score = box.probability;
-            hypothesis.pose.pose.position.x = centroid_out[0];
-            hypothesis.pose.pose.position.y = centroid_out[1];
-            hypothesis.pose.pose.position.z = centroid_out[2];
-            hypothesis.pose.pose.orientation.w = 1;
-
-            object.results.push_back(hypothesis);
-
-            detected_objects.detections.push_back(object);
+            geometry_msgs::Point temp_pt;
+            temp_pt.x = centroid_out[0];
+            temp_pt.y = centroid_out[1];
+            temp_pt.z = centroid_out[2];
 
             // before adding new detection must convert filtered cloud into map frame
             sensor_msgs::PointCloud2 tgt_cloud;
@@ -591,7 +575,7 @@ namespace target_detection {
             new_detection.bbox = box;
             ROS_DEBUG_STREAM("UTGT BOX: " << new_detection.bbox);
 
-            tf2::doTransform(hypothesis.pose.pose.position, new_detection.position.point, current_inv_cam_tf_);
+            tf2::doTransform(temp_pt, new_detection.position.point, current_inv_cam_tf_);
 
             if (debug_viz_) {
 
@@ -604,16 +588,16 @@ namespace target_detection {
         }
     }
 
-    // publish results
-    detected_objects_pub_.publish(detected_objects);
-        
     auto t2 = debug_clock_.now();
     ROS_DEBUG_STREAM("TIME PCL2 CB: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
   }
 
   /**
-   * TODO
-   */
+   * @brief Determines if the cloud_in can be matched to any target in the target_detections_ vector that is of the same target_class passed in.
+   * @param target_class The class of the target ("chair", "fire hydrant", "microwave", ...etc)
+   * @param cloud_in The cloud of the unassigned target in the map frame.  This cloud must be reduced down to the bounding box of the target otherwise it isn't that useful.
+   * @return Returns target_id of target in the target_detections_ vector if position is within dist threshold.  Returns 0 if not matched.
+    */
   int TargetPoseEstimation::isRegisteredTarget(const std::string target_class, sensor_msgs::PointCloud2 cloud_in) {
     auto t1 = debug_clock_.now();
 
@@ -666,9 +650,13 @@ namespace target_detection {
 
 
   /**
-   * TODO
+   * @brief Determines if the position in pos_in is close to a target of type target_class
+   * @param target_class The class of the target ("chair", "fire hydrant", "microwave", ...etc)
+   * @param pos_in The current position of the target to compare against in the map frame
+   * @param dist The distance threshold being checked
+   * @return Returns target_id of target in the target_detections_ vector if position is within dist threshold.  Returns 0 if not close enough.
    */
-  int TargetPoseEstimation::isCloseToTarget(const std::string target_class, const geometry_msgs::PointStamped pos_in) {
+  int TargetPoseEstimation::isCloseToTarget(const std::string target_class, const geometry_msgs::PointStamped pos_in, const double dist) {
     auto t1 = debug_clock_.now();
 
     ROS_DEBUG("COMPARING TGT CLOSNESS");
@@ -678,19 +666,9 @@ namespace target_detection {
         continue;
       }
 
-      double dist_check;
-      private_nh_.param<double>("distance_between_targets", dist_check, 10.0);
-      ROS_DEBUG_STREAM("DISTANCE TGTS PARAM: " << dist_check);
-
-      double xc = tgt.position.point.x;
-      double yc = tgt.position.point.y;
-      double xp = pos_in.point.x;
-      double yp = pos_in.point.y;
-      ROS_DEBUG_STREAM("Xc " << xc << " Xp " << xp << "Yc " << yc << " Yp " << yp << " dist " << ( (xc-xp) * (xc-xp) + (yc-yp) * (yc-yp)));
-
       if ( (tgt.position.point.x - pos_in.point.x) * (tgt.position.point.x - pos_in.point.x)
             + (tgt.position.point.y - pos_in.point.y) * (tgt.position.point.y - pos_in.point.y)
-            < (dist_check * dist_check) ) {
+            < (dist * dist) ) {
 
         auto t2 = debug_clock_.now();
         ROS_DEBUG_STREAM("TIME IS CLOSE TGT: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
@@ -705,7 +683,9 @@ namespace target_detection {
 
 
   /**
-   * TODO
+   * @brief Update the current vector of targets with newly registered target information
+   * @param utgt The unassigned detection that has been examined and matches with the target in tgt_index
+   * @param tgt_index The INDEX of the target that utgt has been matched with in the target_detections_ vector.  INDEX not ID!!!
    */
   void TargetPoseEstimation::updateRegisteredTarget(TargetPoseEstimation::UnassignedDetection utgt, const int tgt_index) {
     auto t1 = debug_clock_.now();
@@ -789,7 +769,59 @@ namespace target_detection {
 
     auto t2 = debug_clock_.now();
     ROS_DEBUG_STREAM("TIME UPDATE TGT PC: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+  }
 
+
+  /**
+   * @brief Convert the target detections data into a Detection3DArray and publish
+   */
+  void TargetPoseEstimation::publishDetectionArray() {
+    // output
+    vision_msgs::Detection3DArray detected_objects;
+    detected_objects.header.stamp = ros::Time::now();
+    detected_objects.header.frame_id = map_frame_;
+    detected_objects.detections.reserve(target_detections_.size());
+    
+    for (const TargetPoseEstimation::TargetDetection &tgt : target_detections_) {
+      // add to the output
+      vision_msgs::Detection3D object;
+      object.header.frame_id = map_frame_;
+      object.header.stamp = ros::Time::now();
+
+      vision_msgs::ObjectHypothesisWithPose hypothesis;
+      hypothesis.id = object_classes[tgt.target_class];
+      hypothesis.score = 1.0;
+      hypothesis.pose.pose.position = tgt.position.point;
+      hypothesis.pose.pose.orientation.x = 0;
+      hypothesis.pose.pose.orientation.y = 0;
+      hypothesis.pose.pose.orientation.z = 0;
+      hypothesis.pose.pose.orientation.w = 1;
+      // hypothesis.pose.covariance
+      object.results.push_back(hypothesis);
+
+      object.bbox.center.position = tgt.position.point;
+      object.bbox.center.orientation.x = 0;
+      object.bbox.center.orientation.y = 0;
+      object.bbox.center.orientation.z = 0;
+      object.bbox.center.orientation.w = 1;
+
+      object.source_cloud = tgt.cloud;
+      
+      TargetPoseEstimation::CloudPtr cloud(new TargetPoseEstimation::Cloud);
+      pcl::fromROSMsg(tgt.cloud, *cloud);
+      PointType min_pt, max_pt;
+      pcl::getMinMax3D(*cloud, min_pt, max_pt);
+
+      object.bbox.size.x = max_pt.x - min_pt.x;
+      object.bbox.size.y = max_pt.y - min_pt.y;
+      object.bbox.size.z = max_pt.z - min_pt.z;
+
+      ROS_DEBUG_STREAM("TGT " << tgt.target_id << " 3D BBOX SIZE" << object.bbox.size);
+      detected_objects.detections.push_back(object);
+    }
+
+    // publish results
+    detected_objects_pub_.publish(detected_objects);
   }
 }
 

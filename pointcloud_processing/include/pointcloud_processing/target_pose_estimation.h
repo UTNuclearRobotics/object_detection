@@ -34,7 +34,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/convert.h>
 #include <sensor_msgs/CameraInfo.h>
-#include <vision_msgs/Detection2DArray.h>
+#include <vision_msgs/Detection3DArray.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -53,6 +53,7 @@
 // #include <pcl/sample_consensus/method_types.h>
 // #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/common/centroid.h>
+#include <pcl/common/common.h>
 
 /**
  * Node API
@@ -96,7 +97,7 @@ public:
   ObjectsMap convertClassesMap(std::map<std::string, std::string> input);
 
   /**
-   * TODO
+   * @brief Runs all of the top level detection code.  Initiates and manages the target detection demo
    */
   void initiateDetections();
 
@@ -286,21 +287,35 @@ private:
 
 
   /**
-   * TODO
-   */
+   * @brief Determines if the cloud_in can be matched to any target in the target_detections_ vector that is of the same target_class passed in.
+   * @param target_class The class of the target ("chair", "fire hydrant", "microwave", ...etc)
+   * @param cloud_in The cloud of the unassigned target in the map frame.  This cloud must be reduced down to the bounding box of the target otherwise it isn't that useful.
+   * @return Returns target_id of target in the target_detections_ vector if position is within dist threshold.  Returns 0 if not matched.
+    */
   int isRegisteredTarget(const std::string target_class, sensor_msgs::PointCloud2 cloud_in);
 
 
   /**
-   * TODO
+   * @brief Determines if the position in pos_in is close to a target of type target_class
+   * @param target_class The class of the target ("chair", "fire hydrant", "microwave", ...etc)
+   * @param pos_in The current position of the target to compare against in the map frame
+   * @param dist The distance threshold being checked
+   * @return Returns target_id of target in the target_detections_ vector if position is within dist threshold.  Returns 0 if not close enough.
    */
-  int isCloseToTarget(const std::string target_class, const geometry_msgs::PointStamped pos_in);
+  int isCloseToTarget(const std::string target_class, const geometry_msgs::PointStamped pos_in, const double dist);
 
 
   /**
-   * TODO
+   * @brief Update the current vector of targets with newly registered target information
+   * @param utgt The unassigned detection that has been examined and matches with the target in tgt_index
+   * @param tgt_index The INDEX of the target that utgt has been matched with in the target_detections_ vector.  INDEX not ID!!!
    */
-  void updateRegisteredTarget(const TargetPoseEstimation::UnassignedDetection, const int tgt_index);
+  void updateRegisteredTarget(const TargetPoseEstimation::UnassignedDetection utgt, const int tgt_index);
+
+  /**
+   * @brief Convert the target detections data into a Detection3DArray and publish
+   */
+  void publishDetectionArray();
 };
 
 }
