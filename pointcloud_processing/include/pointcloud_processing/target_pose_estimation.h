@@ -114,7 +114,7 @@ private:
 
   typedef struct
   {
-    int target_class;
+    std::string target_class;
     sensor_msgs::PointCloud2 cloud; // cloud should be in map frame
     geometry_msgs::PointStamped position; // should be in map frame
     geometry_msgs::TransformStamped robot_tf;
@@ -123,13 +123,12 @@ private:
     geometry_msgs::TransformStamped inv_camera_tf;
     darknet_ros_msgs::BoundingBox bbox;
 
-    // ros::Publisher debug_pub;
   } UnassignedDetection;
 
   typedef struct
   {
     int target_id;
-    int target_class;
+    std::string target_class;
     geometry_msgs::PointStamped position;
     sensor_msgs::PointCloud2 cloud; // cloud in map frame
     std::vector<darknet_ros_msgs::BoundingBox> bboxes;
@@ -139,18 +138,18 @@ private:
     std::vector<geometry_msgs::TransformStamped> inv_robot_tfs;
     std::vector<geometry_msgs::TransformStamped> inv_camera_tfs;
 
-    ros::Publisher debug_pub;
+    ros::Publisher con_lidar_pub;
+    ros::Publisher tgt_position_pub;
     std::vector<ros::Publisher> poses_puber;
     std::vector<ros::Publisher> fov_pc_puber;
-    std::vector<ros::Publisher> view_puber;
   } TargetDetection;
 
   // class variables
   bool debug_viz_;
-  geometry_msgs::TransformStamped current_robot_tf_, current_camera_tf_, prev_robot_tf_, current_inv_cam_tf_, current_inv_rob_tf_;
+  geometry_msgs::TransformStamped current_robot_tf_, current_camera_tf_, prev_robot_tf_, current_inv_cam_tf_, current_inv_rob_tf_, current_lidar_tf_;
 
   // the optical frame of the RGB camera (not the camera base frame)
-  std::string camera_optical_frame_, map_frame_, robot_frame_;
+  std::string camera_optical_frame_, map_frame_, robot_frame_, lidar_frame_;
 
   // ROS Nodehandle
   ros::NodeHandle private_nh_;
@@ -289,13 +288,13 @@ private:
   /**
    * TODO
    */
-  int isRegisteredTarget(const int target_class, sensor_msgs::PointCloud2 cloud_in);
+  int isRegisteredTarget(const std::string target_class, sensor_msgs::PointCloud2 cloud_in);
 
 
   /**
    * TODO
    */
-  bool isCloseToTarget(const int target_class, const geometry_msgs::PointStamped pos_in);
+  int isCloseToTarget(const std::string target_class, const geometry_msgs::PointStamped pos_in);
 
 
   /**

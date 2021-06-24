@@ -82,7 +82,7 @@ namespace target_detection {
     current_robot_tf_.transform.rotation.w = 1;
     prev_robot_tf_ = current_robot_tf_;
 
-    while (true) {
+    while (ros::ok()) {
 
       current_robot_tf_ = updateTf(robot_frame_, map_frame_);
       current_camera_tf_ = updateTf(camera_optical_frame_, map_frame_);
@@ -105,6 +105,7 @@ namespace target_detection {
         ros::Duration(sleeper).sleep();
         current_robot_tf_ = updateTf(robot_frame_, map_frame_);
         current_camera_tf_ = updateTf(camera_optical_frame_, map_frame_);
+        if (!lidar_frame_.empty()) {current_lidar_tf_ = updateTf(camera_optical_frame_, lidar_frame_);}
         current_inv_rob_tf_ = updateTf(map_frame_, robot_frame_);
         current_inv_cam_tf_ = updateTf(map_frame_, camera_optical_frame_);
         if (robotIsTurning(robot_turning_threshold)) {
@@ -112,7 +113,7 @@ namespace target_detection {
         }
         ros::spinOnce();
         auto t2 = debug_clock_.now();
-        // ROS_ERROR_STREAM("TIME SPIN: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+        ROS_DEBUG_STREAM("TIME SPIN: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
       }
 
       ROS_DEBUG("SHOULD HAVE UNASSIGNED TARGETS NOW");
@@ -125,15 +126,17 @@ namespace target_detection {
         auto t1 = debug_clock_.now();
         while (utgt != unassigned_detections_.end()) {
 
-          
           // if the unassigned detection is associated with a known target then must add the data and update new existing target info
           if (const int tgt_id = isRegisteredTarget(utgt->target_class, utgt->cloud)) {
-            ROS_INFO("Registered current view to existing target");
+            ROS_INFO_STREAM("Registered current view to existing target: " << tgt_id << " (" << utgt->target_class << ")");
             updateRegisteredTarget(*utgt, (tgt_id - 1));
             utgt = unassigned_detections_.erase(utgt);
-          } else if (isCloseToTarget(utgt->target_class, utgt->position)) {
-            ROS_INFO("Target is seen but there is the FOV does not perfectly overlap with previous FOV's.  Ignoring current view.");
+
+          // if we find have a detection of the same type that does not overlap with previous views but it really close then let's assume it is the same target and wait for a better view 
+          } else if (const int tgt_id = isCloseToTarget(utgt->target_class, utgt->position)) {
+            ROS_INFO_STREAM("Target " << tgt_id <<  " (" << utgt->target_class << ") " << "is seen but the new FOV does not overlap with at least one of the previous FOV's.  Ignoring current view.");
             utgt = unassigned_detections_.erase(utgt);
+
           } else {
             ++utgt;
           }
@@ -147,7 +150,6 @@ namespace target_detection {
       if (unassigned_detections_.size() > 0) {
         auto t1 = debug_clock_.now();
 
-        ROS_INFO("Assigning new target(s)");
         for (const TargetPoseEstimation::UnassignedDetection &utgt : unassigned_detections_) {
           TargetPoseEstimation::TargetDetection new_tgt;
           new_tgt.target_class = utgt.target_class;
@@ -160,6 +162,8 @@ namespace target_detection {
           new_tgt.camera_tfs.push_back(current_camera_tf_);
           new_tgt.inv_robot_tfs.push_back(current_inv_rob_tf_);
           new_tgt.inv_camera_tfs.push_back(current_inv_cam_tf_);
+
+          ROS_INFO_STREAM("Assigning new target: " << new_tgt.target_id << " (" << new_tgt.target_class << ")");
 
           if (debug_viz_) {
             // debugging
@@ -179,11 +183,13 @@ namespace target_detection {
             new_tgt.poses_puber[0].publish(temp_pose);
             new_tgt.fov_pc_puber[0].publish(new_tgt.fov_clouds[0]);
 
-            new_tgt.debug_pub = nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1)), 1, true);
+            new_tgt.tgt_position_pub = nh_.advertise<geometry_msgs::PointStamped>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_pos"), 1, true);
+            new_tgt.con_lidar_pub = nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1)), 1, true);
 
             ROS_DEBUG_STREAM("PUBLISHING NEW TGT");
             ROS_DEBUG_STREAM(new_tgt.cloud.header);
-            new_tgt.debug_pub.publish(new_tgt.cloud);
+            new_tgt.tgt_position_pub.publish(new_tgt.position);
+            new_tgt.con_lidar_pub.publish(new_tgt.cloud);
           }
           target_detections_.push_back(new_tgt);
         }
@@ -244,7 +250,6 @@ namespace target_detection {
    * @return True if moved beyond the distance or rotational threshold, False if not.
    */
   bool TargetPoseEstimation::robotHasMoved(const double robot_movement_threshold) {
-    
     if ( (current_robot_tf_.transform.translation.x - prev_robot_tf_.transform.translation.x) * (current_robot_tf_.transform.translation.x - prev_robot_tf_.transform.translation.x)
           + (current_robot_tf_.transform.translation.y - prev_robot_tf_.transform.translation.y) * (current_robot_tf_.transform.translation.y - prev_robot_tf_.transform.translation.y)
           > (robot_movement_threshold * robot_movement_threshold) ) {
@@ -272,7 +277,7 @@ namespace target_detection {
       ROS_DEBUG_STREAM("ROBOT TURNING: " << angle);
       return true;
     } else {
-      ROS_DEBUG_STREAM("ROBOT NOT TURNING: " << angle);
+      // ROS_DEBUG_STREAM("ROBOT NOT TURNING: " << angle);
       return false;
     }
   }
@@ -453,153 +458,163 @@ namespace target_detection {
    * @param input_cloud The pointcloud
    */
   void TargetPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud) {
-      auto t1 = debug_clock_.now();
+    ROS_DEBUG("POINTCLOUD CB");
+    auto t1 = debug_clock_.now();
+    if (lidar_frame_.empty()) {
+      ROS_DEBUG("LIDAR FRAME INIT");
+      lidar_frame_ = input_cloud.header.frame_id;
+      return;
+    }
+    
+    double stale_time;
+    private_nh_.param<double>("pointcloud_stale_time", stale_time, 0.05);
+    if (ros::Time::now().toSec() - input_cloud.header.stamp.toSec() > stale_time) {
+      ROS_DEBUG_STREAM("POINTCLOUD STALE");
+      return;
+    }
 
-      // check that we've received bounding boxes
-      if (current_boxes_.bounding_boxes.empty()) {
-          return;
-      }
+    // check that we've received bounding boxes
+    if (current_boxes_.bounding_boxes.empty()) {
+        return;
+    }
 
-      // check that we've received camera info
-      if (camera_info_.height == 0 || camera_info_.width == 0) {
-          return;
-      }
+    // check that we've received camera info
+    if (camera_info_.height == 0 || camera_info_.width == 0) {
+        return;
+    }
 
-      const ros::Time now = ros::Time::now();
+    const ros::Time now = ros::Time::now();
 
-      double confidence_threshold;
-      private_nh_.param<double>("confidence_threshold", confidence_threshold, 0.75);
+    double confidence_threshold;
+    private_nh_.param<double>("confidence_threshold", confidence_threshold, 0.75);
 
-      // transform the pointcloud into the RGB optical frame
-      if (tf2::getFrameId(input_cloud) != camera_optical_frame_) {
-          if (!transformPointCloud2(input_cloud, camera_optical_frame_)) {
-              return;
-          }  
-      }
+    // transform the pointcloud into the RGB optical frame
+    tf2::doTransform(input_cloud, input_cloud, current_lidar_tf_);
 
-      // Convert sensor_msgs::PointCloud2 to pcl::PointCloud
-      TargetPoseEstimation::CloudPtr cloud(new TargetPoseEstimation::Cloud);
-      pcl::fromROSMsg(input_cloud, *cloud);
+    // Convert sensor_msgs::PointCloud2 to pcl::PointCloud
+    TargetPoseEstimation::CloudPtr cloud(new TargetPoseEstimation::Cloud);
+    pcl::fromROSMsg(input_cloud, *cloud);
 
-      // remove NaN points from the cloud
-      TargetPoseEstimation::CloudPtr cloud_nan_filtered(new TargetPoseEstimation::Cloud);
-      std::vector<int> rindices;
-      pcl::removeNaNFromPointCloud(*cloud, *cloud_nan_filtered, rindices);
+    // remove NaN points from the cloud
+    TargetPoseEstimation::CloudPtr cloud_nan_filtered(new TargetPoseEstimation::Cloud);
+    std::vector<int> rindices;
+    pcl::removeNaNFromPointCloud(*cloud, *cloud_nan_filtered, rindices);
 
-      // output
-      vision_msgs::Detection2DArray detected_objects;
-      detected_objects.header.stamp = now;
-      detected_objects.header.frame_id = input_cloud.header.frame_id;
-      detected_objects.detections.reserve(current_boxes_.bounding_boxes.size());
+    // output
+    vision_msgs::Detection2DArray detected_objects;
+    detected_objects.header.stamp = now;
+    detected_objects.header.frame_id = input_cloud.header.frame_id;
+    detected_objects.detections.reserve(current_boxes_.bounding_boxes.size());
 
-      // produce pixel-space coordinates
-      const std::vector<TargetPoseEstimation::PixelCoords> pixel_coordinates = convertCloudToPixelCoords(cloud_nan_filtered, camera_info_);
+    // produce pixel-space coordinates
+    const std::vector<TargetPoseEstimation::PixelCoords> pixel_coordinates = convertCloudToPixelCoords(cloud_nan_filtered, camera_info_);
 
-      // check if any bounding boxes are on or near the edge of the camera image.  If so remove them and return if none left
-      double bbox_edge_x, bbox_edge_y;
-      private_nh_.param<double>("bbox_edge_x", bbox_edge_x, 0.1);
-      private_nh_.param<double>("bbox_edge_y", bbox_edge_y, 0.01);
+    // check if any bounding boxes are on or near the edge of the camera image.  If so remove them and return if none left
+    double bbox_edge_x, bbox_edge_y;
+    private_nh_.param<double>("bbox_edge_x", bbox_edge_x, 0.1);
+    private_nh_.param<double>("bbox_edge_y", bbox_edge_y, 0.01);
 
-      /////////////////////////////////////////////////////////////
-      for(const darknet_ros_msgs::BoundingBox &box : current_boxes_.bounding_boxes) {
-          const TargetPoseEstimation::ObjectClassID id = getObjectID(box.Class, object_classes);
+    /////////////////////////////////////////////////////////////
+    for(const darknet_ros_msgs::BoundingBox &box : current_boxes_.bounding_boxes) {
+        const TargetPoseEstimation::ObjectClassID id = getObjectID(box.Class, object_classes);
 
-          // do we meet the threshold for a confirmed detection?
-          if (box.probability >= confidence_threshold && id != UNKNOWN_OBJECT_ID) {
+        // do we meet the threshold for a confirmed detection?
+        if (box.probability >= confidence_threshold && id != UNKNOWN_OBJECT_ID) {
 
 
-            // check for bounding boxes being close to edges
-            if (box.xmin < camera_info_.width * bbox_edge_x) {
-              ROS_DEBUG("BBOX EDGE LEFT");
-              continue;
-            }
-            if (box.xmax > (camera_info_.width - (camera_info_.width * bbox_edge_x)) ) {
-              ROS_DEBUG("BBOX EDGE RIGHT");
-              continue;
-            }
-
-            if (box.ymin < camera_info_.height * bbox_edge_y) {
-              ROS_DEBUG("BBOX EDGE TOP");
-              continue;
-            }
-            if (box.ymax > (camera_info_.height - (camera_info_.height * bbox_edge_y)) ) {
-              ROS_DEBUG("BBOX EDGE BOTTOM");
-              continue;
-            }
-
-              // ----------------------Extract points in the bounding box-----------
-              const TargetPoseEstimation::CloudPtr cloud_in_bbox = filterPointsInBox(cloud_nan_filtered,
-                                                              pixel_coordinates,
-                                                              box.xmin,
-                                                              box.xmax,
-                                                              box.ymin,
-                                                              box.ymax);
-              
-              // ----------------------Compute centroid-----------------------------
-              Eigen::Vector4f centroid_out;
-              pcl::compute3DCentroid(*cloud_in_bbox, centroid_out); 
-
-              // add to the output
-              vision_msgs::Detection2D object;
-              object.bbox.center.x = (box.xmax + box.xmin)/2;
-              object.bbox.center.y = (box.ymax + box.ymin)/2;
-              object.bbox.size_x = box.xmax - box.xmin;
-              object.bbox.size_y = box.ymax - box.ymin;
-
-              vision_msgs::ObjectHypothesisWithPose hypothesis;
-              hypothesis.id = id;
-              hypothesis.score = box.probability;
-              hypothesis.pose.pose.position.x = centroid_out[0];
-              hypothesis.pose.pose.position.y = centroid_out[1];
-              hypothesis.pose.pose.position.z = centroid_out[2];
-              hypothesis.pose.pose.orientation.w = 1;
-
-              object.results.push_back(hypothesis);
-
-              detected_objects.detections.push_back(object);
-
-              // before adding new detection must convert filtered cloud into map frame
-              sensor_msgs::PointCloud2 tgt_cloud;
-              pcl::toROSMsg(*cloud_in_bbox, tgt_cloud);
-              transformPointCloud2(tgt_cloud, map_frame_);    
-
-              // add new detection to unassigned detections vector
-              TargetPoseEstimation::UnassignedDetection new_detection;
-              new_detection.target_class = id;
-              new_detection.cloud = tgt_cloud;
-              new_detection.camera_tf = current_camera_tf_;
-              new_detection.robot_tf = current_robot_tf_;
-              new_detection.inv_camera_tf = current_inv_cam_tf_;
-              new_detection.inv_robot_tf = current_inv_rob_tf_;
-              ROS_DEBUG_STREAM("BOX: " << box);
-              new_detection.bbox = box;
-              ROS_DEBUG_STREAM("UTGT BOX: " << new_detection.bbox);
-
-              tf2::doTransform(hypothesis.pose.pose.position, new_detection.position.point, current_inv_cam_tf_);
-
-              if (debug_viz_) {
-
-                ROS_DEBUG_STREAM("PUBING UTGT");
-                ROS_DEBUG_STREAM(new_detection.cloud.header);
-                utgt_pub_.publish(new_detection.cloud);
-              }
-
-              unassigned_detections_.push_back(new_detection);
+          // check for bounding boxes being close to edges
+          if (box.xmin < camera_info_.width * bbox_edge_x) {
+            ROS_DEBUG("BBOX EDGE LEFT");
+            continue;
           }
-      }
+          if (box.xmax > (camera_info_.width - (camera_info_.width * bbox_edge_x)) ) {
+            ROS_DEBUG("BBOX EDGE RIGHT");
+            continue;
+          }
+
+          if (box.ymin < camera_info_.height * bbox_edge_y) {
+            ROS_DEBUG("BBOX EDGE TOP");
+            continue;
+          }
+          if (box.ymax > (camera_info_.height - (camera_info_.height * bbox_edge_y)) ) {
+            ROS_DEBUG("BBOX EDGE BOTTOM");
+            continue;
+          }
+
+            // ----------------------Extract points in the bounding box-----------
+            const TargetPoseEstimation::CloudPtr cloud_in_bbox = filterPointsInBox(cloud_nan_filtered,
+                                                            pixel_coordinates,
+                                                            box.xmin,
+                                                            box.xmax,
+                                                            box.ymin,
+                                                            box.ymax);
+            
+            // ----------------------Compute centroid-----------------------------
+            Eigen::Vector4f centroid_out;
+            pcl::compute3DCentroid(*cloud_in_bbox, centroid_out);
+
+            // add to the output
+            vision_msgs::Detection2D object;
+            object.bbox.center.x = (box.xmax + box.xmin)/2;
+            object.bbox.center.y = (box.ymax + box.ymin)/2;
+            object.bbox.size_x = box.xmax - box.xmin;
+            object.bbox.size_y = box.ymax - box.ymin;
+
+            vision_msgs::ObjectHypothesisWithPose hypothesis;
+            hypothesis.id = id;
+            hypothesis.score = box.probability;
+            hypothesis.pose.pose.position.x = centroid_out[0];
+            hypothesis.pose.pose.position.y = centroid_out[1];
+            hypothesis.pose.pose.position.z = centroid_out[2];
+            hypothesis.pose.pose.orientation.w = 1;
+
+            object.results.push_back(hypothesis);
+
+            detected_objects.detections.push_back(object);
+
+            // before adding new detection must convert filtered cloud into map frame
+            sensor_msgs::PointCloud2 tgt_cloud;
+            pcl::toROSMsg(*cloud_in_bbox, tgt_cloud);
+            tf2::doTransform(tgt_cloud, tgt_cloud, current_inv_cam_tf_);
+
+            // add new detection to unassigned detections vector
+            TargetPoseEstimation::UnassignedDetection new_detection;
+            new_detection.target_class = box.Class;
+            new_detection.cloud = tgt_cloud;
+            new_detection.position.header.stamp = ros::Time::now();
+            new_detection.position.header.frame_id = map_frame_;
+            new_detection.camera_tf = current_camera_tf_;
+            new_detection.robot_tf = current_robot_tf_;
+            new_detection.inv_camera_tf = current_inv_cam_tf_;
+            new_detection.inv_robot_tf = current_inv_rob_tf_;
+            ROS_DEBUG_STREAM("BOX: " << box);
+            new_detection.bbox = box;
+            ROS_DEBUG_STREAM("UTGT BOX: " << new_detection.bbox);
+
+            tf2::doTransform(hypothesis.pose.pose.position, new_detection.position.point, current_inv_cam_tf_);
+
+            if (debug_viz_) {
+
+              ROS_DEBUG_STREAM("PUBING UTGT");
+              ROS_DEBUG_STREAM(new_detection.cloud.header);
+              utgt_pub_.publish(new_detection.cloud);
+            }
+
+            unassigned_detections_.push_back(new_detection);
+        }
+    }
 
     // publish results
     detected_objects_pub_.publish(detected_objects);
         
     auto t2 = debug_clock_.now();
     ROS_DEBUG_STREAM("TIME PCL2 CB: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
-
   }
 
   /**
    * TODO
    */
-  int TargetPoseEstimation::isRegisteredTarget(const int target_class, sensor_msgs::PointCloud2 cloud_in) {
+  int TargetPoseEstimation::isRegisteredTarget(const std::string target_class, sensor_msgs::PointCloud2 cloud_in) {
     auto t1 = debug_clock_.now();
 
     for (const TargetPoseEstimation::TargetDetection &tgt : target_detections_) {
@@ -653,7 +668,7 @@ namespace target_detection {
   /**
    * TODO
    */
-  bool TargetPoseEstimation::isCloseToTarget(const int target_class, const geometry_msgs::PointStamped pos_in) {
+  int TargetPoseEstimation::isCloseToTarget(const std::string target_class, const geometry_msgs::PointStamped pos_in) {
     auto t1 = debug_clock_.now();
 
     ROS_DEBUG("COMPARING TGT CLOSNESS");
@@ -679,13 +694,13 @@ namespace target_detection {
 
         auto t2 = debug_clock_.now();
         ROS_DEBUG_STREAM("TIME IS CLOSE TGT: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
-        return true;
+        return tgt.target_id;
       }
     }
     
     auto t2 = debug_clock_.now();
     ROS_DEBUG_STREAM("TIME IS CLOSE TGT: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
-    return false;
+    return 0;
   }
 
 
@@ -752,7 +767,8 @@ namespace target_detection {
 
     // debugging
     if (debug_viz_) {
-      target_detections_[tgt_index].debug_pub.publish(target_detections_[tgt_index].cloud);
+      target_detections_[tgt_index].tgt_position_pub.publish(target_detections_[tgt_index].position);
+      target_detections_[tgt_index].con_lidar_pub.publish(target_detections_[tgt_index].cloud);
 
       target_detections_[tgt_index].poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>( ("tgt" + std::to_string(tgt_index + 1) + "_pose" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
       target_detections_[tgt_index].fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(tgt_index + 1) + "_fov_pc" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
