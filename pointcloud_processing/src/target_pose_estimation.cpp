@@ -166,6 +166,7 @@ namespace target_detection {
           new_tgt.target_id = target_detections_.size() + 1;
           new_tgt.position = utgt.position;
           new_tgt.cloud = utgt.cloud;
+          new_tgt.raw_cloud = utgt.cloud;
           new_tgt.bboxes.push_back(utgt.bbox); 
           new_tgt.fov_clouds.push_back(utgt.cloud);
           new_tgt.robot_tfs.push_back(current_robot_tf_);
@@ -860,9 +861,8 @@ namespace target_detection {
       for (int i = 0; i < tgt.inv_camera_tfs.size(); ++i) {
         bag.write("tgt" + std::to_string(tgt.target_id) + "_camera_tf" + std::to_string(i + 1), now, tgt.inv_camera_tfs[i]);
       }
-
-      bag.close();
     }
+    bag.close();
   }
 }
 
