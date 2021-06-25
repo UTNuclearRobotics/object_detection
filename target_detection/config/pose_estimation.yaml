@@ -13,7 +13,7 @@ sleep_period: 0.0
 pointcloud_stale_time: 0.01
 save_bag_on_shutdown: true
 object_classes:
-  fire hydrant : '1'
+  fire hydrant: '1'
   car: '2'
   truck: '3'
   motorbike: '4'
