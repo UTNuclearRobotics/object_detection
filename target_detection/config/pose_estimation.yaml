@@ -2,7 +2,7 @@ debug_viz: true
 camera_optical_frame: "walrus/realsense_front_color_optical_frame"
 robot_frame: "walrus/base_link"
 map_frame: "walrus/map"
-robot_movement_threshold: 0.2
+robot_movement_threshold: 1.0
 confidence_threshold: 0.99
 distance_between_targets: 10.0
 bbox_pixel_padding: 0
@@ -14,8 +14,91 @@ pointcloud_stale_time: 0.01
 save_bag_on_shutdown: true
 object_classes:
   fire hydrant : '1'
-  person: '2'
-  motorbike: '3'
-  chair: '4'
-  microwave: '5'
-  refrigerator: '6'
+  car: '2'
+  truck: '3'
+  motorbike: '4'
+  stop sign: '5'
+  parking meter: '6'
+  bench: '7'
+
+#  --- Darknet classes ---
+#  person
+#  bicycle
+#  car
+#  motorbike
+#  aeroplane
+#  bus
+#  train
+#  truck
+#  boat
+#  traffic light
+#  fire hydrant
+#  stop sign
+#  parking meter
+#  bench
+#  bird
+#  cat
+#  dog
+#  horse
+#  sheep
+#  cow
+#  elephant
+#  bear
+#  zebra
+#  giraffe
+#  backpack
+#  umbrella
+#  handbag
+#  tie
+#  suitcase
+#  frisbee
+#  skis
+#  snowboard
+#  sports ball
+#  kite
+#  baseball bat
+#  baseball glove
+#  skateboard
+#  surfboard
+#  tennis racket
+#  bottle
+#  wine glass
+#  cup
+#  fork
+#  knife
+#  spoon
+#  bowl
+#  banana
+#  apple
+#  sandwich
+#  orange
+#  broccoli
+#  carrot
+#  hot dog
+#  pizza
+#  donut
+#  cake
+#  chair
+#  sofa
+#  pottedplant
+#  bed
+#  diningtable
+#  toilet
+#  tvmonitor
+#  laptop
+#  mouse
+#  remote
+#  keyboard
+#  cell phone
+#  microwave
+#  oven
+#  toaster
+#  sink
+#  refrigerator
+#  book
+#  clock
+#  vase
+#  scissors
+#  teddy bear
+#  hair drier
+#  toothbrush

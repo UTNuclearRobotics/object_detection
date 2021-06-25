@@ -178,8 +178,8 @@ namespace target_detection {
 
           if (debug_viz_) {
             // debugging
-            new_tgt.poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_pose1"), 1, true));
-            new_tgt.fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_fov_pc1"), 1, true));
+            new_tgt.poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_" + new_tgt.target_class + "_pose1"), 1, true));
+            new_tgt.fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_" + new_tgt.target_class + "_fov_pc1"), 1, true));
 
             geometry_msgs::PoseStamped temp_pose;
             temp_pose.header.stamp = ros::Time::now();
@@ -194,9 +194,9 @@ namespace target_detection {
             new_tgt.poses_puber[0].publish(temp_pose);
             new_tgt.fov_pc_puber[0].publish(new_tgt.fov_clouds[0]);
 
-            new_tgt.tgt_position_pub = nh_.advertise<geometry_msgs::PointStamped>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_pos"), 1, true);
-            new_tgt.cloud_pub = nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1)), 1, true);
-            new_tgt.raw_cloud_pub = nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_raw"), 1, true);
+            new_tgt.tgt_position_pub = nh_.advertise<geometry_msgs::PointStamped>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_" + new_tgt.target_class + "_pos"), 1, true);
+            new_tgt.cloud_pub = nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_" + new_tgt.target_class), 1, true);
+            new_tgt.raw_cloud_pub = nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_" + new_tgt.target_class + "_raw"), 1, true);
 
             ROS_DEBUG_STREAM("PUBLISHING NEW TGT");
             ROS_DEBUG_STREAM(new_tgt.cloud.header);
@@ -582,6 +582,9 @@ namespace target_detection {
             new_detection.bbox = box;
             ROS_DEBUG_STREAM("UTGT BOX: " << new_detection.bbox);
 
+            // check if the target class has any spaces and replace with underscore
+            std::replace(new_detection.target_class.begin(), new_detection.target_class.end(), ' ', '_');
+            
             tf2::doTransform(temp_pt, new_detection.position.point, current_inv_cam_tf_);
 
             if (debug_viz_) {
@@ -755,8 +758,8 @@ namespace target_detection {
       target_detections_[tgt_index].cloud_pub.publish(target_detections_[tgt_index].cloud);
       target_detections_[tgt_index].raw_cloud_pub.publish(target_detections_[tgt_index].raw_cloud);
 
-      target_detections_[tgt_index].poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>( ("tgt" + std::to_string(tgt_index + 1) + "_pose" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
-      target_detections_[tgt_index].fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(tgt_index + 1) + "_fov_pc" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
+      target_detections_[tgt_index].poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>( ("tgt" + std::to_string(tgt_index + 1) + "_" + target_detections_[tgt_index].target_class + "_pose" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
+      target_detections_[tgt_index].fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(tgt_index + 1) + "_" + target_detections_[tgt_index].target_class + "_fov_pc" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
 
       geometry_msgs::PoseStamped temp_pose;
       temp_pose.header.stamp = ros::Time::now();
@@ -839,20 +842,20 @@ namespace target_detection {
     auto now = ros::Time::now();
 
     for (const TargetPoseEstimation::TargetDetection &tgt : target_detections_) {
-      bag.write("tgt" + std::to_string(tgt.target_id) + "_cloud", now, tgt.cloud);
-      bag.write("tgt" + std::to_string(tgt.target_id) + "_raw_cloud", now, tgt.raw_cloud);
-      bag.write("tgt" + std::to_string(tgt.target_id) + "_position", now, tgt.position);
+      bag.write(tgt.target_class + std::to_string(tgt.target_id) + "_cloud", now, tgt.cloud);
+      bag.write(tgt.target_class + std::to_string(tgt.target_id) + "_raw_cloud", now, tgt.raw_cloud);
+      bag.write(tgt.target_class + std::to_string(tgt.target_id) + "_position", now, tgt.position);
 
       for (int i = 0; i < tgt.fov_clouds.size(); ++i) {
-        bag.write("tgt" + std::to_string(tgt.target_id) + "_fov" + std::to_string(i + 1) + "_cloud", now, tgt.fov_clouds[i]);
+        bag.write(tgt.target_class + std::to_string(tgt.target_id) + "_fov" + std::to_string(i + 1) + "_cloud", now, tgt.fov_clouds[i]);
       }
 
       for (int i = 0; i < tgt.inv_robot_tfs.size(); ++i) {
-        bag.write("tgt" + std::to_string(tgt.target_id) + "_robot_tf" + std::to_string(i + 1), now, tgt.robot_tfs[i]);
+        bag.write(tgt.target_class + std::to_string(tgt.target_id) + "_robot_tf" + std::to_string(i + 1), now, tgt.robot_tfs[i]);
       }
       
       for (int i = 0; i < tgt.inv_camera_tfs.size(); ++i) {
-        bag.write("tgt" + std::to_string(tgt.target_id) + "_camera_tf" + std::to_string(i + 1), now, tgt.inv_camera_tfs[i]);
+        bag.write(tgt.target_class + std::to_string(tgt.target_id) + "_camera_tf" + std::to_string(i + 1), now, tgt.inv_camera_tfs[i]);
       }
     }
     bag.close();
