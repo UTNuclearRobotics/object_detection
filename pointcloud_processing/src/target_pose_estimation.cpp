@@ -55,7 +55,13 @@ namespace target_detection {
   }
 
   // destructor
-  TargetPoseEstimation::~TargetPoseEstimation() {}
+  TargetPoseEstimation::~TargetPoseEstimation() {
+    bool save;
+    private_nh_.param<bool>("save_bag_on_shutdown", save, false);
+    if (save) {
+      saveBag();
+    }
+  }
 
 
   /**
@@ -187,12 +193,14 @@ namespace target_detection {
             new_tgt.fov_pc_puber[0].publish(new_tgt.fov_clouds[0]);
 
             new_tgt.tgt_position_pub = nh_.advertise<geometry_msgs::PointStamped>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_pos"), 1, true);
-            new_tgt.con_lidar_pub = nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1)), 1, true);
+            new_tgt.cloud_pub = nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1)), 1, true);
+            new_tgt.raw_cloud_pub = nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(target_detections_.size() + 1) + "_raw"), 1, true);
 
             ROS_DEBUG_STREAM("PUBLISHING NEW TGT");
             ROS_DEBUG_STREAM(new_tgt.cloud.header);
             new_tgt.tgt_position_pub.publish(new_tgt.position);
-            new_tgt.con_lidar_pub.publish(new_tgt.cloud);
+            new_tgt.cloud_pub.publish(new_tgt.cloud);
+            new_tgt.raw_cloud_pub.publish(new_tgt.cloud);
           }
           target_detections_.push_back(new_tgt);
     
@@ -692,6 +700,7 @@ namespace target_detection {
     
     // Before we start messing with the utgt cloud let's save the raw data into the tgt detections
     target_detections_[tgt_index].fov_clouds.push_back(utgt.cloud);
+    pcl::concatenatePointCloud(target_detections_[tgt_index].raw_cloud, utgt.cloud, target_detections_[tgt_index].raw_cloud);
 
     // Filter existing cloud down by the new bbox
     sensor_msgs::PointCloud2 temp_cloud;
@@ -748,7 +757,8 @@ namespace target_detection {
     // debugging
     if (debug_viz_) {
       target_detections_[tgt_index].tgt_position_pub.publish(target_detections_[tgt_index].position);
-      target_detections_[tgt_index].con_lidar_pub.publish(target_detections_[tgt_index].cloud);
+      target_detections_[tgt_index].cloud_pub.publish(target_detections_[tgt_index].cloud);
+      target_detections_[tgt_index].raw_cloud_pub.publish(target_detections_[tgt_index].cloud);
 
       target_detections_[tgt_index].poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>( ("tgt" + std::to_string(tgt_index + 1) + "_pose" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
       target_detections_[tgt_index].fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(tgt_index + 1) + "_fov_pc" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
@@ -822,6 +832,36 @@ namespace target_detection {
 
     // publish results
     detected_objects_pub_.publish(detected_objects);
+  }
+
+
+  /**
+   * @brief Save the target detections data into bag file 
+   */
+  void TargetPoseEstimation::saveBag() {
+    rosbag::Bag bag;
+    bag.open("target_dections.bag", rosbag::bagmode::Write);
+    auto now = ros::Time::now();
+
+    for (const TargetPoseEstimation::TargetDetection &tgt : target_detections_) {
+      bag.write("tgt" + std::to_string(tgt.target_id) + "_cloud", now, tgt.cloud);
+      bag.write("tgt" + std::to_string(tgt.target_id) + "_raw_cloud", now, tgt.raw_cloud);
+      bag.write("tgt" + std::to_string(tgt.target_id) + "_position", now, tgt.position);
+
+      for (int i = 0; i < tgt.fov_clouds.size(); ++i) {
+        bag.write("tgt" + std::to_string(tgt.target_id) + "_fov" + std::to_string(i + 1) + "_cloud", now, tgt.fov_clouds[i]);
+      }
+
+      for (int i = 0; i < tgt.inv_robot_tfs.size(); ++i) {
+        bag.write("tgt" + std::to_string(tgt.target_id) + "_robot_tf" + std::to_string(i + 1), now, tgt.robot_tfs[i]);
+      }
+      
+      for (int i = 0; i < tgt.inv_camera_tfs.size(); ++i) {
+        bag.write("tgt" + std::to_string(tgt.target_id) + "_camera_tf" + std::to_string(i + 1), now, tgt.inv_camera_tfs[i]);
+      }
+
+      bag.close();
+    }
   }
 }
 

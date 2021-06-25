@@ -38,6 +38,7 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <rosbag/bag.h>
 
 // Darknet detection
 #include <darknet_ros_msgs/BoundingBoxes.h>
@@ -131,7 +132,8 @@ private:
     int target_id;
     std::string target_class;
     geometry_msgs::PointStamped position;
-    sensor_msgs::PointCloud2 cloud; // cloud in map frame
+    sensor_msgs::PointCloud2 cloud; // filtered cloud in map frame
+    sensor_msgs::PointCloud2 raw_cloud; // cloud of all raw data in map frame with no filtering
     std::vector<darknet_ros_msgs::BoundingBox> bboxes;
     std::vector<sensor_msgs::PointCloud2> fov_clouds; // these clouds must be saved in the map frame
     std::vector<geometry_msgs::TransformStamped> robot_tfs;
@@ -139,7 +141,8 @@ private:
     std::vector<geometry_msgs::TransformStamped> inv_robot_tfs;
     std::vector<geometry_msgs::TransformStamped> inv_camera_tfs;
 
-    ros::Publisher con_lidar_pub;
+    ros::Publisher cloud_pub;
+    ros::Publisher raw_cloud_pub;
     ros::Publisher tgt_position_pub;
     std::vector<ros::Publisher> poses_puber;
     std::vector<ros::Publisher> fov_pc_puber;
@@ -316,6 +319,11 @@ private:
    * @brief Convert the target detections data into a Detection3DArray and publish
    */
   void publishDetectionArray();
+
+  /**
+   * @brief Save the target detections data into bag file
+   */
+  void saveBag();
 };
 
 }
