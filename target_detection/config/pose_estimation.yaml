@@ -11,6 +11,7 @@ bbox_edge_y: 0.0
 robot_turning_threshold: 0.005
 sleep_period: 0.0
 pointcloud_stale_time: 0.01
+save_bag_on_shutdown: true
 object_classes:
   fire hydrant : '1'
   person: '2'

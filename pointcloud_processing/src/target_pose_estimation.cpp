@@ -59,6 +59,7 @@ namespace target_detection {
     bool save;
     private_nh_.param<bool>("save_bag_on_shutdown", save, false);
     if (save) {
+      ROS_INFO("SAVING TGT BAG");
       saveBag();
     }
   }
@@ -758,7 +759,7 @@ namespace target_detection {
     if (debug_viz_) {
       target_detections_[tgt_index].tgt_position_pub.publish(target_detections_[tgt_index].position);
       target_detections_[tgt_index].cloud_pub.publish(target_detections_[tgt_index].cloud);
-      target_detections_[tgt_index].raw_cloud_pub.publish(target_detections_[tgt_index].cloud);
+      target_detections_[tgt_index].raw_cloud_pub.publish(target_detections_[tgt_index].raw_cloud);
 
       target_detections_[tgt_index].poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>( ("tgt" + std::to_string(tgt_index + 1) + "_pose" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
       target_detections_[tgt_index].fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>( ("tgt" + std::to_string(tgt_index + 1) + "_fov_pc" + std::to_string(target_detections_[tgt_index].camera_tfs.size())), 1, true));
