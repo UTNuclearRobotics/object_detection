@@ -39,6 +39,7 @@
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <rosbag/bag.h>
+#include <std_srvs/Empty.h>
 
 // Darknet detection
 #include <darknet_ros_msgs/BoundingBoxes.h>
@@ -324,6 +325,11 @@ private:
    * @brief Save the target detections data into bag file
    */
   void saveBag();
+
+  /**
+   * @brief Offers a ros service client to trigger a rosbag save of the target detections data
+   */
+  bool saveBagClient(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
 };
 
 }

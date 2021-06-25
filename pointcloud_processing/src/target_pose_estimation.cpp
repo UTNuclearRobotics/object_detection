@@ -32,12 +32,13 @@ namespace target_detection {
   TargetPoseEstimation::TargetPoseEstimation() :
       private_nh_("~")
   {
-    // tf_listener_(tf_buffer_);
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(tf_buffer_);
     bbox_sub_ = private_nh_.subscribe("bounding_boxes", 1, &TargetPoseEstimation::bBoxCb, this);
     cloud_sub_ = private_nh_.subscribe("pointcloud", 1, &TargetPoseEstimation::pointCloudCb, this); 
     camera_info_sub_ = private_nh_.subscribe("camera_info", 1, &TargetPoseEstimation::cameraInfoCb, this);
     detected_objects_pub_ = private_nh_.advertise<vision_msgs::Detection3DArray>("detected_objects", 1);
+
+    private_nh_.advertiseService("save_bag", &TargetPoseEstimation::saveBagClient, this);
 
     private_nh_.param<bool>("debug_viz", debug_viz_, true);
     private_nh_.param<std::string>("map_frame", map_frame_, "map");
@@ -152,7 +153,6 @@ namespace target_detection {
           }
         }
         auto t2 = debug_clock_.now();
-
         ROS_DEBUG_STREAM("TIME TO CHECK UTGTS: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
       } 
 
@@ -213,7 +213,6 @@ namespace target_detection {
         unassigned_detections_.clear();
         auto t2 = debug_clock_.now();
         ROS_DEBUG_STREAM("TIME ASSIGN NEW TGTS: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
-
       }
     }
   }
@@ -499,8 +498,6 @@ namespace target_detection {
         return;
     }
 
-    const ros::Time now = ros::Time::now();
-
     double confidence_threshold;
     private_nh_.param<double>("confidence_threshold", confidence_threshold, 0.75);
 
@@ -588,19 +585,17 @@ namespace target_detection {
             tf2::doTransform(temp_pt, new_detection.position.point, current_inv_cam_tf_);
 
             if (debug_viz_) {
-
               ROS_DEBUG_STREAM("PUBING UTGT");
               ROS_DEBUG_STREAM(new_detection.cloud.header);
               utgt_pub_.publish(new_detection.cloud);
             }
-
             unassigned_detections_.push_back(new_detection);
         }
     }
-
     auto t2 = debug_clock_.now();
     ROS_DEBUG_STREAM("TIME PCL2 CB: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
   }
+
 
   /**
    * @brief Determines if the cloud_in can be matched to any target in the target_detections_ vector that is of the same target_class passed in.
@@ -643,7 +638,6 @@ namespace target_detection {
             break;
         }
       }
-
       // if we made it through the last loop without breaking then it is a tgt match and return the associated target
       if (tgt_match) {
         ROS_DEBUG_STREAM("TGT MATCHED TO: " << tgt.target_id);
@@ -732,7 +726,6 @@ namespace target_detection {
 
       // need to transform back to map frame
       tf2::doTransform(temp_cloud, utgt.cloud, target_detections_[tgt_index].inv_camera_tfs[i]);
-
     }
 
     // Concatenate clouds and pad new data
@@ -864,7 +857,17 @@ namespace target_detection {
     }
     bag.close();
   }
+
+
+  /**
+   * @brief Offers a ros service client to trigger a rosbag save of the target detections data
+   */
+  bool TargetPoseEstimation::saveBagClient(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res) {
+    saveBag();
+    return true;
+  }
 }
+
 
 int main (int argc, char** argv) {
     // Initialize ROS
