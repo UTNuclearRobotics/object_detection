@@ -851,7 +851,7 @@ namespace target_detection {
    */
   void TargetPoseEstimation::saveBag() {
     rosbag::Bag bag;
-    bag.open("target_dections.bag", rosbag::bagmode::Write);
+    bag.open("target_detections.bag", rosbag::bagmode::Write);
     auto now = ros::Time::now();
 
     for (const TargetPoseEstimation::TargetDetection &tgt : target_detections_) {
