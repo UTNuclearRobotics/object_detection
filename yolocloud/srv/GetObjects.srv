@@ -1,4 +1,0 @@
----
-string[] objectlist
-geometry_msgs/Point[] map_locations
-float32[] timelist

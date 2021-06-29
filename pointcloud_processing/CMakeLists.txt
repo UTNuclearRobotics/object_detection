@@ -19,7 +19,6 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   darknet_ros_msgs
   message_filters
-  pointcloud_processing_msgs
   visualization_msgs
   tf2_sensor_msgs
   vision_msgs
@@ -42,7 +41,6 @@ catkin_package(
     pcl_ros
     roscpp
     message_filters
-    pointcloud_processing_msgs
     darknet_ros_msgs
     tf2_sensor_msgs
     vision_msgs
@@ -60,15 +58,11 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(rgbd_processing src/pcl_processing.cpp)
 add_executable(rgb_plus_lidar_processing src/sep_processing.cpp)
 add_executable(target_pose_estimation src/target_pose_estimation.cpp)
-#add_executable(people_processing src/people_processing.cpp)
 
-target_link_libraries(rgbd_processing ${catkin_LIBRARIES})
 target_link_libraries(rgb_plus_lidar_processing ${catkin_LIBRARIES})
 target_link_libraries(target_pose_estimation ${catkin_LIBRARIES})
-#target_link_libraries(people_processing ${catkin_LIBRARIES})
 
 add_dependencies(target_pose_estimation ${${PROJECT_NAME}_exported_targets} ${catkin_EXPORTED_TARGETS})
 

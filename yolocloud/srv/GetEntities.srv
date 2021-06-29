@@ -1,3 +1,0 @@
-int32[] entity_ids
----
-geometry_msgs/Point[] map_locations
