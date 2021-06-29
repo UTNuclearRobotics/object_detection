@@ -165,6 +165,9 @@ private:
   // Subscribers
   ros::Subscriber bbox_sub_, cloud_sub_, camera_info_sub_;
 
+  // Service
+  ros::ServiceServer save_server_;
+
   // Initialize transform listener
   tf2_ros::Buffer tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;

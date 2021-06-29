@@ -38,7 +38,7 @@ namespace target_detection {
     camera_info_sub_ = private_nh_.subscribe("camera_info", 1, &TargetPoseEstimation::cameraInfoCb, this);
     detected_objects_pub_ = private_nh_.advertise<vision_msgs::Detection3DArray>("detected_objects", 1);
 
-    private_nh_.advertiseService("save_bag", &TargetPoseEstimation::saveBagClient, this);
+    save_server_ = private_nh_.advertiseService("save_bag", &TargetPoseEstimation::saveBagClient, this);
 
     private_nh_.param<bool>("debug_viz", debug_viz_, true);
     private_nh_.param<std::string>("map_frame", map_frame_, "map");
@@ -78,14 +78,27 @@ namespace target_detection {
     private_nh_.param<double>("sleep_period", sleeper, 0.1);
     private_nh_.param<double>("distance_between_targets", dist_check, 10.0);
 
-    // init robot pose to map origin
-    current_robot_tf_.transform.translation.x = 0;
-    current_robot_tf_.transform.translation.y = 0;
-    current_robot_tf_.transform.translation.z = 0;
-    current_robot_tf_.transform.rotation.x = 0;
-    current_robot_tf_.transform.rotation.y = 0;
-    current_robot_tf_.transform.rotation.z = 0;
-    current_robot_tf_.transform.rotation.w = 1;
+    // init robot pose to map origin wait for robot and camera transforms for a 2.5 minutes then give up
+    ROS_INFO_STREAM("Waiting for transform from " << map_frame_ << " to " << robot_frame_);
+    try {
+      current_robot_tf_ = tf_buffer_.lookupTransform(robot_frame_, map_frame_, ros::Time(0), ros::Duration(150.0));
+    } catch (tf2::TransformException &ex) {
+      ROS_ERROR_STREAM("Could not get transform from " << map_frame_ << " to " << robot_frame_ << "! Exiting");
+      ROS_ERROR("%s",ex.what());
+      return;
+    }
+    ROS_INFO("Initial robot transform acquired");
+    
+    ROS_INFO_STREAM("Waiting for transform from " << map_frame_ << " to " << camera_optical_frame_);
+    try {
+      current_camera_tf_ = tf_buffer_.lookupTransform(camera_optical_frame_, map_frame_, ros::Time(0), ros::Duration(150.0));
+    } catch (tf2::TransformException &ex) {
+      ROS_ERROR_STREAM("Could not get transform from " << map_frame_ << " to " << camera_optical_frame_ << "! Exiting");
+      ROS_ERROR("%s",ex.what());
+      return;
+    }
+    ROS_INFO("Initial camera transform acquired");
+
     prev_robot_tf_ = current_robot_tf_;
 
     while (ros::ok()) {
@@ -251,7 +264,7 @@ namespace target_detection {
     try {
       temp_tf = tf_buffer_.lookupTransform(frame1, frame2, ros::Time(0), ros::Duration(0.1));
     } catch (tf2::TransformException &ex) {
-      ROS_ERROR_STREAM("Could not get transform from " << frame1 << " to " << frame2 << "! Target detection positions may be incorrect!");
+      ROS_ERROR_STREAM("Could not get transform from " << frame2 << " to " << frame1 << "! Target detection positions may be incorrect because of old transforms!");
       ROS_ERROR("%s",ex.what());
     }
 
@@ -866,6 +879,9 @@ namespace target_detection {
    * @brief Offers a ros service client to trigger a rosbag save of the target detections data
    */
   bool TargetPoseEstimation::saveBagClient(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res) {
+    if (target_detections_.empty()) {
+      return false;
+    }
     saveBag();
     return true;
   }
