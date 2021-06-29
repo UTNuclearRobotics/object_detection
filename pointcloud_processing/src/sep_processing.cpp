@@ -19,6 +19,8 @@
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/common/centroid.h>
 
+#include <chrono>
+
 // macros
 #define UNKNOWN_OBJECT_ID -1
 
@@ -33,6 +35,7 @@ typedef std::map<ObjectClassName, ObjectClassID> ObjectsMap;
 
 // if true, we will publish the FoV and bounding box pointclouds
 bool debug_lidar_viz;
+std::chrono::high_resolution_clock debug_clock_;
 
 // the optical frame of the RGB camera (not the link frame)
 std::string rgb_optical_frame_;
@@ -240,6 +243,7 @@ CloudPtr filterPointsInBox(const CloudPtr input,
                            const int ymin,
                            const int ymax)
 {
+    auto t1 = debug_clock_.now();
     pcl::PointIndices::Ptr indices_in_bbox(new pcl::PointIndices());
     indices_in_bbox->indices.reserve(input->size());
 
@@ -264,7 +268,10 @@ CloudPtr filterPointsInBox(const CloudPtr input,
     bbox_filter.setIndices(indices_in_bbox);
     bbox_filter.setNegative(false);
     bbox_filter.filter(*cloud_in_bbox);
-
+    auto t2 = debug_clock_.now();
+    // if (std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count() > 1) {
+        ROS_ERROR_STREAM("TIME FILTER POINTS IN BOX: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+    // }
     return cloud_in_bbox;
 }
 
@@ -299,6 +306,7 @@ bool transformPointCloud2(sensor_msgs::PointCloud2 &pointcloud,
  */
 void pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
 {
+    auto t1 = debug_clock_.now();
     // check that we've received bounding boxes
     if (current_boxes_.bounding_boxes.empty())
     {
@@ -413,6 +421,11 @@ void pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
 
     // publish results
     detected_objects_pub.publish(detected_objects);
+ 
+    auto t2 = debug_clock_.now();
+    
+    ROS_ERROR_STREAM("TIME PC CB: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
+
 }
 
 
