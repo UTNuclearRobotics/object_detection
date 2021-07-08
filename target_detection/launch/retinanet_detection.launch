@@ -2,7 +2,10 @@
 <launch>
 
   <!-- ###########################  Retinanet ############################# -->
-  <node pkg="retinanet_ros" type="test.py" name="barrel_detection" output="screen"/>
+  <node pkg="retinanet_ros" type="test.py" name="barrel_detection" output="screen">
+    <remap from="retina_ros/bounding_boxes" to="darknet_ros/bounding_boxes"/>
+    <remap from="detected_image" to="darknet_ros/detection_image"/>
+  </node>
 
   <!-- ########################  Realsense Camera  ######################## -->
   <arg name="serial_no"           default=""/>
