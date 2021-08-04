@@ -81,7 +81,7 @@ namespace target_detection {
     // init robot pose to map origin wait for robot and camera transforms for a 2.5 minutes then give up
     ROS_INFO_STREAM("Waiting for transform from " << map_frame_ << " to " << robot_frame_);
     try {
-      current_robot_tf_ = tf_buffer_.lookupTransform(robot_frame_, map_frame_, ros::Time(0), ros::Duration(150.0));
+      current_robot_tf_ = tf_buffer_.lookupTransform(robot_frame_, map_frame_, ros::Time(0), ros::Duration(600.0));
     } catch (tf2::TransformException &ex) {
       ROS_ERROR_STREAM("Could not get transform from " << map_frame_ << " to " << robot_frame_ << "! Exiting");
       ROS_ERROR("%s",ex.what());
@@ -91,7 +91,7 @@ namespace target_detection {
     
     ROS_INFO_STREAM("Waiting for transform from " << map_frame_ << " to " << camera_optical_frame_);
     try {
-      current_camera_tf_ = tf_buffer_.lookupTransform(camera_optical_frame_, map_frame_, ros::Time(0), ros::Duration(150.0));
+      current_camera_tf_ = tf_buffer_.lookupTransform(camera_optical_frame_, map_frame_, ros::Time(0), ros::Duration(600.0));
     } catch (tf2::TransformException &ex) {
       ROS_ERROR_STREAM("Could not get transform from " << map_frame_ << " to " << camera_optical_frame_ << "! Exiting");
       ROS_ERROR("%s",ex.what());

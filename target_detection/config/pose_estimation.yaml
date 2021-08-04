@@ -2,24 +2,25 @@ debug_viz: true
 camera_optical_frame: "walrus/realsense_front_color_optical_frame"
 robot_frame: "walrus/base_link"
 map_frame: "walrus/map"
-robot_movement_threshold: 1.0
-confidence_threshold: 0.99
-distance_between_targets: 10.0
+robot_movement_threshold: 0.5
+confidence_threshold: 0.50
+distance_between_targets: 0.2
 bbox_pixel_padding: 0
-bbox_edge_x: 0.05
-bbox_edge_y: 0.0
+bbox_edge_x: 0.1
+bbox_edge_y: 0.1
 robot_turning_threshold: 0.005
 sleep_period: 0.0
 pointcloud_stale_time: 0.01
 save_bag_on_shutdown: true
 object_classes:
-  fire hydrant: '1'
-  car: '2'
-  truck: '3'
-  motorbike: '4'
-  stop sign: '5'
-  parking meter: '6'
-  bench: '7'
+  barrel: '1'
+#  fire hydrant: '1'
+#  car: '2'
+#  truck: '3'
+#  motorbike: '4'
+#  stop sign: '5'
+#  parking meter: '6'
+#  bench: '7'
 
 #  --- Darknet classes ---
 #  person
