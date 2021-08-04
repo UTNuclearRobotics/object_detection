@@ -160,7 +160,7 @@ private:
   ros::NodeHandle private_nh_;
 
   // Publishers
-  ros::Publisher detected_objects_pub_, lidar_fov_pub_, lidar_bbox_pub_, utgt_pub_;
+  ros::Publisher detected_objects_pub_, lidar_fov_pub_, lidar_bbox_pub_, utgt_pub_, detection_pub_;
 
   // Subscribers
   ros::Subscriber bbox_sub_, cloud_sub_, camera_info_sub_;
@@ -323,6 +323,7 @@ private:
    * @brief Convert the target detections data into a Detection3DArray and publish
    */
   void publishDetectionArray();
+  void publishDetection(const int tgt_index);
 
   /**
    * @brief Save the target detections data into bag file

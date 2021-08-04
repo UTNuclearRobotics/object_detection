@@ -37,6 +37,7 @@ namespace target_detection {
     cloud_sub_ = private_nh_.subscribe("pointcloud", 1, &TargetPoseEstimation::pointCloudCb, this); 
     camera_info_sub_ = private_nh_.subscribe("camera_info", 1, &TargetPoseEstimation::cameraInfoCb, this);
     detected_objects_pub_ = private_nh_.advertise<vision_msgs::Detection3DArray>("detected_objects", 1);
+    detection_pub_ = private_nh_.advertise<vision_msgs::Detection3D>("detection", 1);
 
     save_server_ = private_nh_.advertiseService("save_bag", &TargetPoseEstimation::saveBagClient, this);
 
@@ -153,6 +154,7 @@ namespace target_detection {
 
             // publish results now that a target has been updated
             publishDetectionArray();
+            publishDetection(tgt_id - 1);
 
             utgt = unassigned_detections_.erase(utgt);
 
@@ -221,6 +223,7 @@ namespace target_detection {
     
           // publish results now that a target has been added
           publishDetectionArray();
+          publishDetection(target_detections_.size() - 1);
         }
 
         unassigned_detections_.clear();
@@ -843,6 +846,51 @@ namespace target_detection {
 
     // publish results
     detected_objects_pub_.publish(detected_objects);
+  }
+
+
+  /**
+   * @brief Convert the target detections data into a Detection3DArray and publish
+   */
+  void TargetPoseEstimation::publishDetection(const int tgt_index) {
+    // output
+    vision_msgs::Detection3D detection;
+    detection.header.stamp = ros::Time::now();
+    detection.header.frame_id = map_frame_;
+    
+    // add to the output
+    vision_msgs::ObjectHypothesisWithPose hypothesis;
+    hypothesis.id = tgt_index + 1; //object_classes[target_detections_[tgt_index].target_class];
+    hypothesis.score = 1.0;
+    hypothesis.pose.pose.position = target_detections_[tgt_index].position.point;
+    hypothesis.pose.pose.orientation.x = 0;
+    hypothesis.pose.pose.orientation.y = 0;
+    hypothesis.pose.pose.orientation.z = 0;
+    hypothesis.pose.pose.orientation.w = 1;
+    // hypothesis.pose.covariance
+    detection.results.push_back(hypothesis);
+
+    detection.bbox.center.position = target_detections_[tgt_index].position.point;
+    detection.bbox.center.orientation.x = 0;
+    detection.bbox.center.orientation.y = 0;
+    detection.bbox.center.orientation.z = 0;
+    detection.bbox.center.orientation.w = 1;
+
+    detection.source_cloud = target_detections_[tgt_index].cloud;
+    
+    TargetPoseEstimation::CloudPtr cloud(new TargetPoseEstimation::Cloud);
+    pcl::fromROSMsg(target_detections_[tgt_index].cloud, *cloud);
+    PointType min_pt, max_pt;
+    pcl::getMinMax3D(*cloud, min_pt, max_pt);
+
+    detection.bbox.size.x = max_pt.x - min_pt.x;
+    detection.bbox.size.y = max_pt.y - min_pt.y;
+    detection.bbox.size.z = max_pt.z - min_pt.z;
+
+    ROS_DEBUG_STREAM("TGT " << target_detections_[tgt_index].target_id << " 3D BBOX SIZE" << detection.bbox.size);
+
+    // publish results
+    detection_pub_.publish(detection);
   }
 
 
