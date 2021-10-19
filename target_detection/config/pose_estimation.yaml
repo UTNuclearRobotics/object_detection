@@ -2,8 +2,8 @@ debug_viz: true
 camera_optical_frame: "walrus/realsense_front_color_optical_frame"
 robot_frame: "walrus/base_link"
 map_frame: "walrus/map"
-robot_movement_threshold: 0.5
-confidence_threshold: 0.50
+robot_movement_threshold: 2.0
+confidence_threshold: 0.70
 distance_between_targets: 0.2
 bbox_pixel_padding: 0
 bbox_edge_x: 0.1

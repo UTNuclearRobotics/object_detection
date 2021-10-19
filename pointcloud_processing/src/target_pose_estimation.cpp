@@ -814,7 +814,14 @@ namespace target_detection {
 
       vision_msgs::ObjectHypothesisWithPose hypothesis;
       hypothesis.id = object_classes[tgt.target_class];
-      hypothesis.score = 1.0;
+
+      switch (tgt.bboxes.size()) {
+        case 0:  hypothesis.score = 0.0;
+        case 1:  hypothesis.score = 0.3;
+        case 2:  hypothesis.score = 0.8;
+        default: hypothesis.score = 1.0;
+      }
+
       hypothesis.pose.pose.position = tgt.position.point;
       hypothesis.pose.pose.orientation.x = 0;
       hypothesis.pose.pose.orientation.y = 0;
