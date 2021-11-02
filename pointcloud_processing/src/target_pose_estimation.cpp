@@ -533,7 +533,9 @@ namespace target_detection {
     const std::vector<TargetPoseEstimation::PixelCoords> pixel_coordinates = convertCloudToPixelCoords(cloud_nan_filtered, camera_info_);
 
     // check if any bounding boxes are on or near the edge of the camera image.  If so remove them and return if none left
+    bool bbox_edge;
     double bbox_edge_x, bbox_edge_y;
+    private_nh_.param<bool>("bbox_edge", bbox_edge, true);
     private_nh_.param<double>("bbox_edge_x", bbox_edge_x, 0.1);
     private_nh_.param<double>("bbox_edge_y", bbox_edge_y, 0.01);
 
@@ -544,23 +546,25 @@ namespace target_detection {
         // do we meet the threshold for a confirmed detection?
         if (box.probability >= confidence_threshold && id != UNKNOWN_OBJECT_ID) {
 
-          // check for bounding boxes being close to edges
-          if (box.xmin < camera_info_.width * bbox_edge_x) {
-            ROS_DEBUG("BBOX EDGE LEFT");
-            continue;
-          }
-          if (box.xmax > (camera_info_.width - (camera_info_.width * bbox_edge_x)) ) {
-            ROS_DEBUG("BBOX EDGE RIGHT");
-            continue;
-          }
+          if (bbox_edge) {
+            // check for bounding boxes being close to edges
+            if (box.xmin < camera_info_.width * bbox_edge_x) {
+              ROS_DEBUG("BBOX EDGE LEFT");
+              continue;
+            }
+            if (box.xmax > (camera_info_.width - (camera_info_.width * bbox_edge_x)) ) {
+              ROS_DEBUG("BBOX EDGE RIGHT");
+              continue;
+            }
 
-          if (box.ymin < camera_info_.height * bbox_edge_y) {
-            ROS_DEBUG("BBOX EDGE TOP");
-            continue;
-          }
-          if (box.ymax > (camera_info_.height - (camera_info_.height * bbox_edge_y)) ) {
-            ROS_DEBUG("BBOX EDGE BOTTOM");
-            continue;
+            if (box.ymin < camera_info_.height * bbox_edge_y) {
+              ROS_DEBUG("BBOX EDGE TOP");
+              continue;
+            }
+            if (box.ymax > (camera_info_.height - (camera_info_.height * bbox_edge_y)) ) {
+              ROS_DEBUG("BBOX EDGE BOTTOM");
+              continue;
+            }
           }
 
             // ----------------------Extract points in the bounding box-----------
@@ -814,13 +818,16 @@ namespace target_detection {
 
       vision_msgs::ObjectHypothesisWithPose hypothesis;
       hypothesis.id = object_classes[tgt.target_class];
-
-      switch (tgt.bboxes.size()) {
-        case 0:  hypothesis.score = 0.0;
-        case 1:  hypothesis.score = 0.3;
-        case 2:  hypothesis.score = 0.8;
-        default: hypothesis.score = 1.0;
-      }
+      hypothesis.score = 1.0;
+      
+      // This switch isn't working properly for some reason
+      // switch (tgt.bboxes.size()) {
+      //   case 0:  hypothesis.score = 0.0;
+      //   case 1:  hypothesis.score = 0.3;
+      //   case 2:  hypothesis.score = 0.8;
+      //   default: hypothesis.score = 1.0;
+      //            ROS_ERROR_STREAM("BBOXES SIZE: " << tgt.bboxes.size());
+      // }
 
       hypothesis.pose.pose.position = tgt.position.point;
       hypothesis.pose.pose.orientation.x = 0;
