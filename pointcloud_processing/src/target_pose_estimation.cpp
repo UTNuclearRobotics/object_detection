@@ -73,11 +73,12 @@ namespace target_detection {
   void TargetPoseEstimation::initiateDetections() {
 
     ROS_DEBUG("INITIATE DETS");
-    double robot_movement_threshold, robot_turning_threshold, sleeper, dist_check;
+    double robot_movement_threshold, robot_turning_threshold, sleeper, dist_bet_tgts, new_tgt_dist_limit;
     private_nh_.param<double>("robot_movement_threshold", robot_movement_threshold, 2.0);
     private_nh_.param<double>("robot_turning_threshold", robot_turning_threshold, 0.1);
     private_nh_.param<double>("sleep_period", sleeper, 0.1);
-    private_nh_.param<double>("distance_between_targets", dist_check, 10.0);
+    private_nh_.param<double>("distance_between_targets", dist_bet_tgts, 10.0);
+    private_nh_.param<double>("new_tgt_dist_limit", new_tgt_dist_limit, 10.0);
 
     // init robot pose to map origin wait for robot and camera transforms for a 2.5 minutes then give up
     ROS_INFO_STREAM("Waiting for transform from " << map_frame_ << " to " << robot_frame_);
@@ -159,7 +160,7 @@ namespace target_detection {
             utgt = unassigned_detections_.erase(utgt);
 
           // if we find have a detection of the same type that does not overlap with previous views but it really close then let's assume it is the same target and wait for a better view 
-          } else if (const int tgt_id = isCloseToTarget(utgt->target_class, utgt->position, dist_check)) {
+          } else if (const int tgt_id = isCloseToTarget(utgt->target_class, utgt->position, dist_bet_tgts)) {
             ROS_INFO_STREAM("Target " << tgt_id <<  " (" << utgt->target_class << ") " << "is seen but the new FOV does not overlap with at least one of the previous FOV's.  Ignoring current view.");
             utgt = unassigned_detections_.erase(utgt);
 
@@ -176,6 +177,16 @@ namespace target_detection {
         auto t1 = debug_clock_.now();
 
         for (const TargetPoseEstimation::UnassignedDetection &utgt : unassigned_detections_) {
+          
+          // check to see if the uassigned target is past the distance limit from the robot to add in as a new target
+          double dx, dy;
+          dx = utgt.position.point.x - current_inv_rob_tf_.transform.translation.x;
+          dy = utgt.position.point.y - current_inv_rob_tf_.transform.translation.y;
+          if ((dx*dx + dy*dy) > (new_tgt_dist_limit*new_tgt_dist_limit)) {
+            ROS_DEBUG_STREAM("New tgt discovered but it is outside the new target distance limit of: " << new_tgt_dist_limit << " dx: " << dx << " dy: " << dy);
+            continue;
+          }
+
           TargetPoseEstimation::TargetDetection new_tgt;
           new_tgt.target_class = utgt.target_class;
           new_tgt.target_id = target_detections_.size() + 1;
