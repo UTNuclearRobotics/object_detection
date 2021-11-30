@@ -23,6 +23,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2_sensor_msgs
   vision_msgs
   geometry_msgs
+  image_transport
 )
 
 ## System dependencies are found with CMake's conventions
@@ -45,6 +46,7 @@ catkin_package(
     tf2_sensor_msgs
     vision_msgs
     geometry_msgs
+    image_transport
 )
 
 ###########
@@ -60,9 +62,11 @@ include_directories(
 
 add_executable(rgb_plus_lidar_processing src/sep_processing.cpp)
 add_executable(target_pose_estimation src/target_pose_estimation.cpp)
+add_executable(image_buffer src/image_buffer.cpp)
 
 target_link_libraries(rgb_plus_lidar_processing ${catkin_LIBRARIES})
 target_link_libraries(target_pose_estimation ${catkin_LIBRARIES})
+target_link_libraries(image_buffer ${catkin_LIBRARIES})
 
 add_dependencies(target_pose_estimation ${${PROJECT_NAME}_exported_targets} ${catkin_EXPORTED_TARGETS})
 
