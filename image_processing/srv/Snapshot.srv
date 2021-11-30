@@ -1,0 +1,7 @@
+---
+sensor_msgs/CameraInfo camera_info
+sensor_msgs/Image img
+sensor_msgs/CompressedImage cimg
+
+bool img_valid
+bool cimg_valid

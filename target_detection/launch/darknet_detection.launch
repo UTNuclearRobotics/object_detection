@@ -4,6 +4,14 @@
   <!-- ###########################  Yolo ############################# -->
   <include file="$(find darknet_ros)/launch/yolo.launch" />
 
+  <!-- ###########################  Image Snapshot ########################## -->
+  <node pkg="image_processing" type="image_snapshot" name="image_snapshot" output="screen">
+    <param name="stale_time" value="1.0"/>
+    <remap from="image" to="/camera/color/image_raw"/>
+    <remap from="image/compressed" to="/camera/color/image_raw/compressed"/>
+    <remap from="camera_info" to="/camera/color/camera_info"/>
+  </node>
+
   <!-- ########################  Realsense Camera  ######################## -->
   <arg name="serial_no"           default=""/>
   <arg name="usb_port_id"         default=""/>
@@ -21,7 +29,7 @@
 
   <arg name="depth_width"         default="-1"/>
   <arg name="depth_height"        default="-1"/>
-  <arg name="enable_depth"        default="true"/>
+  <arg name="enable_depth"        default="false"/>
 
   <arg name="confidence_width"    default="-1"/>
   <arg name="confidence_height"   default="-1"/>
@@ -48,7 +56,7 @@
   <arg name="enable_gyro"         default="true"/>
   <arg name="enable_accel"        default="true"/>
 
-  <arg name="enable_pointcloud"         default="true"/>
+  <arg name="enable_pointcloud"         default="false"/>
   <arg name="pointcloud_texture_stream" default="RS2_STREAM_COLOR"/>
   <arg name="pointcloud_texture_index"  default="0"/>
   <arg name="allow_no_texture_points"   default="false"/>
