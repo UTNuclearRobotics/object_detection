@@ -973,11 +973,11 @@ int main (int argc, char** argv) {
     target_detection::TargetPoseEstimation node;
 
     std::map<std::string, std::string> temp_map;
-    if (!node.nh_.hasParam("/target_pose_estimation/object_classes")) {
+    if (!node.nh_.hasParam("target_pose_estimation/object_classes")) {
         ROS_ERROR("Failed to load dictionary parameter 'object_classes'.");
         return 1;
     }
-    node.nh_.getParam("/target_pose_estimation/object_classes", temp_map);
+    node.nh_.getParam("target_pose_estimation/object_classes", temp_map);
 
 
     try {
