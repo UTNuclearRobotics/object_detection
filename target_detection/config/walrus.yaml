@@ -1,0 +1,103 @@
+# camera_optical_frame: "walrus/realsense_front_color_optical_frame"
+# robot_frame: "walrus/base_link"
+# map_frame: "walrus/static_map"
+debug_viz: true
+robot_movement_threshold: 0.05
+confidence_threshold: 0.65
+distance_between_targets: 10.0
+new_tgt_dist_limit: 10.0
+bbox_pixel_padding: -50
+bbox_edge: false
+bbox_edge_x: 0.01
+bbox_edge_y: 0.01
+robot_turning_threshold: 0.005
+sleep_period: 0.0
+pointcloud_stale_time: 0.01
+save_bag_on_shutdown: true
+object_classes:
+  barrel: '1'
+
+#  --- Retinanet classes ---
+#  barrel
+
+#  --- Darknet classes ---
+#  person
+#  bicycle
+#  car
+#  motorbike
+#  aeroplane
+#  bus
+#  train
+#  truck
+#  boat
+#  traffic light
+#  fire hydrant
+#  stop sign
+#  parking meter
+#  bench
+#  bird
+#  cat
+#  dog
+#  horse
+#  sheep
+#  cow
+#  elephant
+#  bear
+#  zebra
+#  giraffe
+#  backpack
+#  umbrella
+#  handbag
+#  tie
+#  suitcase
+#  frisbee
+#  skis
+#  snowboard
+#  sports ball
+#  kite
+#  baseball bat
+#  baseball glove
+#  skateboard
+#  surfboard
+#  tennis racket
+#  bottle
+#  wine glass
+#  cup
+#  fork
+#  knife
+#  spoon
+#  bowl
+#  banana
+#  apple
+#  sandwich
+#  orange
+#  broccoli
+#  carrot
+#  hot dog
+#  pizza
+#  donut
+#  cake
+#  chair
+#  sofa
+#  pottedplant
+#  bed
+#  diningtable
+#  toilet
+#  tvmonitor
+#  laptop
+#  mouse
+#  remote
+#  keyboard
+#  cell phone
+#  microwave
+#  oven
+#  toaster
+#  sink
+#  refrigerator
+#  book
+#  clock
+#  vase
+#  scissors
+#  teddy bear
+#  hair drier
+#  toothbrush

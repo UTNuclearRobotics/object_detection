@@ -1,11 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <launch>
 
+  <arg name="robot" default="walrus"/>
+  <arg name="static" default="false"/>
+
+  <group ns="$(arg robot)">
     <node pkg="pointcloud_processing" type="target_pose_estimation" name="target_pose_estimation" output="screen">
-      <rosparam command="load" file="$(find target_detection)/config/pose_estimation.yaml" />
+      <rosparam command="load" file="$(find target_detection)/config/$(arg robot).yaml" />
+      <param name="map_frame" value="$(arg robot)/map" unless="$(arg static)"/>
+      <param name="map_frame" value="$(arg robot)/static_map" if="$(arg static)"/>
+      <param name="robot_frame" value="$(arg robot)/base_link"/>
+      <param name="camera_optical_frame" value="$(arg robot)/realsense_front_color_optical_frame"/>
       <remap from="~camera_info" to="/camera/color/camera_info"/>
       <remap from="~bounding_boxes" to="/darknet_ros/bounding_boxes"/>
-      <remap from="~pointcloud" to="/walrus/lidar_points"/>
+      <remap from="~pointcloud" to="/$(arg robot)/lidar_points"/>
     </node>
+  </group>
 
 </launch>

@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <launch>
 
+  <arg name="robot" default="walrus"/>
+
   <!-- ###########################  Yolo ############################# -->
   <include file="$(find darknet_ros)/launch/yolo.launch" />
 
@@ -18,7 +20,7 @@
   <arg name="device_type"         default="d435i"/>
   <arg name="json_file_path"      default=""/>
   <arg name="camera"              default="camera"/>
-  <arg name="tf_prefix"           default="walrus/realsense_front"/>
+  <arg name="tf_prefix"           default="$(arg robot)/realsense_front"/>
   <arg name="external_manager"    default="false"/>
   <arg name="manager"             default="realsense2_camera_manager"/>
   <arg name="output"              default="screen"/>
