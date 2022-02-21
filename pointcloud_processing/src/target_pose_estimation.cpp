@@ -881,7 +881,8 @@ namespace target_detection {
     // output
     vision_msgs::Detection3D detection;
     detection.header.stamp = ros::Time::now();
-    detection.header.frame_id = map_frame_;
+    // detection.header.frame_id = map_frame_;
+    detection.header.frame_id = target_detections_[tgt_index].target_class;
     
     // add to the output
     vision_msgs::ObjectHypothesisWithPose hypothesis;
