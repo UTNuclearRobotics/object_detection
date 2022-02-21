@@ -2,7 +2,7 @@
 # robot_frame: "jackal/base_link"
 # map_frame: "jackal/static_map"
 debug_viz: true
-robot_movement_threshold: 0.05
+robot_movement_threshold: 0.3
 confidence_threshold: 0.65
 distance_between_targets: 10.0
 new_tgt_dist_limit: 10.0
