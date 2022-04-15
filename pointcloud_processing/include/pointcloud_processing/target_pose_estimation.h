@@ -2,7 +2,7 @@
 //      Title     : target_pose_estimation.h
 //      Platforms : Ubuntu 64-bit
 //      Copyright : Copyright© The University of Texas at Austin, 2021. All rights reserved.
-//                 
+//
 //          All files within this directory are subject to the following, unless an alternative
 //          license is explicitly included within the text of each file.
 //
@@ -27,30 +27,30 @@
 
 #pragma once
 
-#include <chrono>
-#include <ros/ros.h>
-#include <tf2_ros/transform_listener.h>
-#include <tf2_sensor_msgs/tf2_sensor_msgs.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
-#include <tf2/convert.h>
-#include <sensor_msgs/CameraInfo.h>
-#include <vision_msgs/Detection3DArray.h>
-#include <geometry_msgs/TransformStamped.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/TransformStamped.h>
+#include <ros/ros.h>
 #include <rosbag/bag.h>
+#include <sensor_msgs/CameraInfo.h>
 #include <std_srvs/Empty.h>
+#include <tf2/convert.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_sensor_msgs/tf2_sensor_msgs.h>
+#include <vision_msgs/Detection3DArray.h>
+#include <chrono>
 
 // Darknet detection
 #include <darknet_ros_msgs/BoundingBoxes.h>
 
 // PCL specific includes
-#include <pcl_conversions/pcl_conversions.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
+#include <pcl/ModelCoefficients.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/passthrough.h>
-#include <pcl/ModelCoefficients.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl_conversions/pcl_conversions.h>
 // #include <pcl/sample_consensus/model_types.h>
 // #include <pcl/sample_consensus/method_types.h>
 // #include <pcl/segmentation/sac_segmentation.h>
@@ -68,11 +68,10 @@
  * 
 */
 
-
-namespace target_detection {
-
-class TargetPoseEstimation {
-
+namespace target_detection
+{
+class TargetPoseEstimation
+{
 public:
   // basic constructor
   TargetPoseEstimation();
@@ -104,22 +103,21 @@ public:
   void initiateDetections();
 
 private:
-
-  // macros
-  #define UNKNOWN_OBJECT_ID -1
+// macros
+#define UNKNOWN_OBJECT_ID -1
 
   typedef struct
   {
-      int32_t x;
-      int32_t y;
-      double z;
+    int32_t x;
+    int32_t y;
+    double z;
   } PixelCoords;
 
   typedef struct
   {
     std::string target_class;
-    sensor_msgs::PointCloud2 cloud; // cloud should be in map frame
-    geometry_msgs::PointStamped position; // should be in map frame
+    sensor_msgs::PointCloud2 cloud;        // cloud should be in map frame
+    geometry_msgs::PointStamped position;  // should be in map frame
     geometry_msgs::TransformStamped robot_tf;
     geometry_msgs::TransformStamped camera_tf;
     geometry_msgs::TransformStamped inv_robot_tf;
@@ -133,10 +131,11 @@ private:
     int target_id;
     std::string target_class;
     geometry_msgs::PointStamped position;
-    sensor_msgs::PointCloud2 cloud; // filtered cloud in map frame
-    sensor_msgs::PointCloud2 raw_cloud; // cloud of all raw data in map frame with no filtering
+    sensor_msgs::PointCloud2 cloud;      // filtered cloud in map frame
+    sensor_msgs::PointCloud2 raw_cloud;  // cloud of all raw data in map frame with no filtering
     std::vector<darknet_ros_msgs::BoundingBox> bboxes;
-    std::vector<sensor_msgs::PointCloud2> fov_clouds; // these clouds must be saved in the map frame
+    std::vector<sensor_msgs::PointCloud2>
+      fov_clouds;  // these clouds must be saved in the map frame
     std::vector<geometry_msgs::TransformStamped> robot_tfs;
     std::vector<geometry_msgs::TransformStamped> camera_tfs;
     std::vector<geometry_msgs::TransformStamped> inv_robot_tfs;
@@ -151,7 +150,8 @@ private:
 
   // class variables
   bool debug_viz_;
-  geometry_msgs::TransformStamped current_robot_tf_, current_camera_tf_, prev_robot_tf_, current_inv_cam_tf_, current_inv_rob_tf_, current_lidar_tf_;
+  geometry_msgs::TransformStamped current_robot_tf_, current_camera_tf_, prev_robot_tf_,
+    current_inv_cam_tf_, current_inv_rob_tf_, current_lidar_tf_;
 
   // the optical frame of the RGB camera (not the camera base frame)
   std::string camera_optical_frame_, map_frame_, robot_frame_, lidar_frame_;
@@ -188,8 +188,7 @@ private:
    * @param msg Bounding boxes
    * @post The message is copied to a local cache
    */
-  void bBoxCb(const darknet_ros_msgs::BoundingBoxesConstPtr& msg);
-
+  void bBoxCb(const darknet_ros_msgs::BoundingBoxesConstPtr & msg);
 
   /**
    * @brief Callback function for the RGB camera info
@@ -200,14 +199,12 @@ private:
    */
   void cameraInfoCb(const sensor_msgs::CameraInfoConstPtr msg);
 
-
   /**
    * @brief Updates the current_robot_pose_ in the map frame
    * @param map_frame The map frame in string form
    * @param robot_frame The robot base frame in string form
    */
   geometry_msgs::TransformStamped updateTf(const std::string frame1, const std::string frame2);
-
 
   /**
    * @brief Checks if the robot position has moved beyond a distance threshold in the map frame
@@ -218,14 +215,12 @@ private:
    */
   bool robotHasMoved(const double dist_threshold);
 
-
   /**
    * @brief Checks if the robot orientation has varied beyond a certain angle in the past frame
    * @param robot_turning_threshold The turning threshold to check against
    * @return True if rotated beyond the rotational threshold, False if not.
    */
   bool robotIsTurning(const double robot_turning_threshold);
-
 
   /**
    * @brief Convert a cartesian point in the camera optical frame to (x,y) pixel coordinates.
@@ -236,9 +231,8 @@ private:
    *                    intrinsic matrix.
    * @return The (x,y) pixel coordinates, plus depth values.
    */
-  inline PixelCoords poseToPixel(const PointType &point,
-                                const sensor_msgs::CameraInfo &camera_info);
-
+  inline PixelCoords poseToPixel(
+    const PointType & point, const sensor_msgs::CameraInfo & camera_info);
 
   /**
    * @brief Convert a pointcloud into (x,y,depth) pixel coordinate space.
@@ -248,9 +242,8 @@ private:
    *                    intrinsic matrix.
    * @return A vector of (x,y,depth) pixel coordinates. Index order is preserved.
    */
-  std::vector<PixelCoords> convertCloudToPixelCoords(const CloudPtr cloud,
-                                                    const sensor_msgs::CameraInfo &camera_info);
-
+  std::vector<PixelCoords> convertCloudToPixelCoords(
+    const CloudPtr cloud, const sensor_msgs::CameraInfo & camera_info);
 
   /**
    * @brief Check a map of known object classes to retreive the class ID for an object class name.
@@ -258,8 +251,7 @@ private:
    * @param map The map of object class names to class IDs
    * @return The class ID. -1 indicates that class_name was not a key in the map.
    */
-  ObjectClassID getObjectID(const ObjectClassName class_name, const ObjectsMap &map);
-
+  ObjectClassID getObjectID(const ObjectClassName class_name, const ObjectsMap & map);
 
   /**
    * @brief Extract from a pointcloud those points that are within a rectangular bounding box.
@@ -272,18 +264,13 @@ private:
    * @param ymax The y-pixel upper bound of the rectangle
    * @return A pointcloud containing only the points within the bounding box.
    */
-  CloudPtr filterPointsInBox(const CloudPtr input,
-                            const std::vector<PixelCoords> &pixel_coordinates,
-                            const int xmin,
-                            const int xmax,
-                            const int ymin,
-                            const int ymax);
+  CloudPtr filterPointsInBox(
+    const CloudPtr input, const std::vector<PixelCoords> & pixel_coordinates, const int xmin,
+    const int xmax, const int ymin, const int ymax);
 
+  bool transformPointCloud2(sensor_msgs::PointCloud2 & pointcloud, const std::string target_frame);
 
-  bool transformPointCloud2(sensor_msgs::PointCloud2 &pointcloud,
-                            const std::string target_frame);
-
-  geometry_msgs::TransformStamped invertTransform(const geometry_msgs::TransformStamped &tf_ins);
+  geometry_msgs::TransformStamped invertTransform(const geometry_msgs::TransformStamped & tf_ins);
 
   /**
    * @brief Callback function for the pointclouds
@@ -291,7 +278,6 @@ private:
    * @param input_cloud The pointcloud
    */
   void pointCloudCb(sensor_msgs::PointCloud2 input_cloud);
-
 
   /**
    * @brief Determines if the cloud_in can be matched to any target in the target_detections_ vector that is of the same target_class passed in.
@@ -301,7 +287,6 @@ private:
     */
   int isRegisteredTarget(const std::string target_class, sensor_msgs::PointCloud2 cloud_in);
 
-
   /**
    * @brief Determines if the position in pos_in is close to a target of type target_class
    * @param target_class The class of the target ("chair", "fire hydrant", "microwave", ...etc)
@@ -309,15 +294,16 @@ private:
    * @param dist The distance threshold being checked
    * @return Returns target_id of target in the target_detections_ vector if position is within dist threshold.  Returns 0 if not close enough.
    */
-  int isCloseToTarget(const std::string target_class, const geometry_msgs::PointStamped pos_in, const double dist);
-
+  int isCloseToTarget(
+    const std::string target_class, const geometry_msgs::PointStamped pos_in, const double dist);
 
   /**
    * @brief Update the current vector of targets with newly registered target information
    * @param utgt The unassigned detection that has been examined and matches with the target in tgt_index
    * @param tgt_index The INDEX of the target that utgt has been matched with in the target_detections_ vector.  INDEX not ID!!!
    */
-  void updateRegisteredTarget(const TargetPoseEstimation::UnassignedDetection utgt, const int tgt_index);
+  void updateRegisteredTarget(
+    const TargetPoseEstimation::UnassignedDetection utgt, const int tgt_index);
 
   /**
    * @brief Convert the target detections data into a Detection3DArray and publish
@@ -333,7 +319,7 @@ private:
   /**
    * @brief Offers a ros service client to trigger a rosbag save of the target detections data
    */
-  bool saveBagClient(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res);
+  bool saveBagClient(std_srvs::Empty::Request & req, std_srvs::Empty::Response & res);
 };
 
-}
+}  // namespace target_detection

@@ -27,45 +27,39 @@
 
 #include <pointcloud_processing/image_buffer.h>
 
-namespace target_detection {
-
-    ImageBuffer::ImageBuffer() :
-        nh_("~")
-      , image_sub_nh_(nh_)
-    {
-        detections_sub_ = nh_.subscribe("detections", 1, &ImageBuffer::detectionsCb, this);
-
-        latest_image_pub_ = nh_.advertise<vision_msgs::Detection3D>("latest_image", 1);
-
-        nh_.setCallbackQueue(&image_callback_queue_);
-        image_transport::ImageTransport it(image_sub_nh_);
-        image_sub_ = it.subscribe("in_image_base_topic", 1, &ImageBuffer::imageCb, this);
-    }
-
-
-    void ImageBuffer::imageCb(const sensor_msgs::ImageConstPtr& msg)
-    {
-        latest_image_pub_.publish(msg);
-    }
-
-
-
-    void ImageBuffer::detectionsCb(const vision_msgs::Detection3DConstPtr& msg)
-    {
-        image_callback_queue_.callAvailable();
-    }
-
-} // namespace target_detection
-
-
-int main (int argc, char** argv)
+namespace target_detection
 {
-    // Initialize ROS
-    ros::init(argc, argv, "image_buffer");
+ImageBuffer::ImageBuffer() : nh_("~"), image_sub_nh_(nh_)
+{
+  detections_sub_ = nh_.subscribe("detections", 1, &ImageBuffer::detectionsCb, this);
 
-    target_detection::ImageBuffer node;
+  latest_image_pub_ = nh_.advertise<vision_msgs::Detection3D>("latest_image", 1);
 
-    ros::spin();
+  nh_.setCallbackQueue(&image_callback_queue_);
+  image_transport::ImageTransport it(image_sub_nh_);
+  image_sub_ = it.subscribe("in_image_base_topic", 1, &ImageBuffer::imageCb, this);
+}
 
-    return 0;
+void ImageBuffer::imageCb(const sensor_msgs::ImageConstPtr & msg)
+{
+  latest_image_pub_.publish(msg);
+}
+
+void ImageBuffer::detectionsCb(const vision_msgs::Detection3DConstPtr & msg)
+{
+  image_callback_queue_.callAvailable();
+}
+
+}  // namespace target_detection
+
+int main(int argc, char ** argv)
+{
+  // Initialize ROS
+  ros::init(argc, argv, "image_buffer");
+
+  target_detection::ImageBuffer node;
+
+  ros::spin();
+
+  return 0;
 }

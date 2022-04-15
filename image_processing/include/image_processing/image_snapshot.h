@@ -2,7 +2,7 @@
 //      Title     : image_snapshot.h
 //      Platforms : Ubuntu 64-bit
 //      Copyright : Copyright© The University of Texas at Austin, 2021. All rights reserved.
-//                 
+//
 //          All files within this directory are subject to the following, unless an alternative
 //          license is explicitly included within the text of each file.
 //
@@ -27,13 +27,13 @@
 
 #pragma once
 
-#include <ros/ros.h>
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/CompressedImage.h>
-#include <sensor_msgs/CameraInfo.h>
-#include <std_srvs/Empty.h>
-#include <image_transport/image_transport.h>
 #include <image_processing/Snapshot.h>
+#include <image_transport/image_transport.h>
+#include <ros/ros.h>
+#include <sensor_msgs/CameraInfo.h>
+#include <sensor_msgs/CompressedImage.h>
+#include <sensor_msgs/Image.h>
+#include <std_srvs/Empty.h>
 
 /**
  * Node API
@@ -46,11 +46,10 @@
  * 
 */
 
-
-namespace image_snapshot {
-
-class ImageSnapshot {
-
+namespace image_snapshot
+{
+class ImageSnapshot
+{
 public:
   // basic constructor
   ImageSnapshot();
@@ -62,7 +61,6 @@ public:
   ros::NodeHandle nh_;
 
 private:
-
   // class variables
   double stale_time_;
   sensor_msgs::Image image_;
@@ -83,11 +81,12 @@ private:
 
   void cameraInfoCb(const sensor_msgs::CameraInfoConstPtr msg);
 
-  void imageCb(const sensor_msgs::ImageConstPtr &msg);
-  
-  void compressedImageCb(const sensor_msgs::CompressedImageConstPtr &msg);
+  void imageCb(const sensor_msgs::ImageConstPtr & msg);
 
-  bool sendSnapshot(image_processing::Snapshot::Request &req, image_processing::Snapshot::Response &res);
+  void compressedImageCb(const sensor_msgs::CompressedImageConstPtr & msg);
+
+  bool sendSnapshot(
+    image_processing::Snapshot::Request & req, image_processing::Snapshot::Response & res);
 };
 
-}
+}  // namespace image_snapshot

@@ -27,31 +27,31 @@
 
 #pragma once
 
-#include <ros/ros.h>
-#include <ros/callback_queue.h>
 #include <image_transport/image_transport.h>
+#include <ros/callback_queue.h>
+#include <ros/ros.h>
 #include <vision_msgs/Detection3D.h>
 
-namespace target_detection {
-
-class ImageBuffer {
+namespace target_detection
+{
+class ImageBuffer
+{
 public:
-    ImageBuffer();
+  ImageBuffer();
 
 private:
-    void imageCb(const sensor_msgs::ImageConstPtr& msg);
+  void imageCb(const sensor_msgs::ImageConstPtr & msg);
 
-    void detectionsCb(const vision_msgs::Detection3DConstPtr& msg);
+  void detectionsCb(const vision_msgs::Detection3DConstPtr & msg);
 
-    ros::NodeHandle nh_;
-    ros::NodeHandle image_sub_nh_;
+  ros::NodeHandle nh_;
+  ros::NodeHandle image_sub_nh_;
 
-    ros::CallbackQueue image_callback_queue_;
+  ros::CallbackQueue image_callback_queue_;
 
-    image_transport::Subscriber image_sub_;
-    ros::Subscriber detections_sub_;
-    ros::Publisher latest_image_pub_;
-
+  image_transport::Subscriber image_sub_;
+  ros::Subscriber detections_sub_;
+  ros::Publisher latest_image_pub_;
 };
 
-} // namespace target_detection
+}  // namespace target_detection
