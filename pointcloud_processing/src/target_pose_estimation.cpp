@@ -29,13 +29,12 @@
 
 namespace target_detection
 {
-TargetPoseEstimation::TargetPoseEstimation() : private_nh_("~")
+TargetPoseEstimation::TargetPoseEstimation() : nh_(""), private_nh_("~")
 {
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(tf_buffer_);
-  bbox_sub_ = private_nh_.subscribe("bounding_boxes", 1, &TargetPoseEstimation::bBoxCb, this);
-  cloud_sub_ = private_nh_.subscribe("pointcloud", 1, &TargetPoseEstimation::pointCloudCb, this);
-  camera_info_sub_ =
-    private_nh_.subscribe("camera_info", 1, &TargetPoseEstimation::cameraInfoCb, this);
+  bbox_sub_ = nh_.subscribe("bounding_boxes", 1, &TargetPoseEstimation::bBoxCb, this);
+  cloud_sub_ = nh_.subscribe("pointcloud", 1, &TargetPoseEstimation::pointCloudCb, this);
+  camera_info_sub_ = nh_.subscribe("camera_info", 1, &TargetPoseEstimation::cameraInfoCb, this);
   detected_objects_pub_ =
     private_nh_.advertise<vision_msgs::Detection3DArray>("detected_objects", 1);
   detection_pub_ = private_nh_.advertise<vision_msgs::Detection3D>("detection", 1);

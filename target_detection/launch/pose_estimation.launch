@@ -11,9 +11,9 @@
       <param name="map_frame" value="$(arg robot)/static_map" if="$(arg static)"/>
       <param name="robot_frame" value="$(arg robot)/base_link"/>
       <param name="camera_optical_frame" value="$(arg robot)/realsense_front_color_optical_frame"/>
-      <remap from="~camera_info" to="/camera/color/camera_info"/>
-      <remap from="~bounding_boxes" to="/darknet_ros/bounding_boxes"/>
-      <remap from="~pointcloud" to="/$(arg robot)/lidar_points"/>
+      <remap from="camera_info" to="realsense_front/color/camera_info"/>
+      <remap from="bounding_boxes" to="darknet_ros/bounding_boxes"/>
+      <remap from="pointcloud" to="lidar_points"/>
     </node>
   </group>
 
