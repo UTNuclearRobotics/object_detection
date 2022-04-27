@@ -29,7 +29,7 @@
 
 namespace image_snapshot
 {
-ImageSnapshot::ImageSnapshot() : private_nh_("~")
+ImageSnapshot::ImageSnapshot() : nh_(""), private_nh_("~")
 {
   image_transport::ImageTransport it(nh_);
 
