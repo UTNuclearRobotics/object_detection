@@ -30,15 +30,19 @@
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
+#include <image_processing/Snapshot.h>
 #include <ros/ros.h>
 #include <rosbag/bag.h>
 #include <sensor_msgs/CameraInfo.h>
+#include <sensor_msgs/CompressedImage.h>
+#include <sensor_msgs/Image.h>
 #include <std_srvs/Empty.h>
 #include <tf2/convert.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_sensor_msgs/tf2_sensor_msgs.h>
 #include <vision_msgs/Detection3DArray.h>
+
 #include <chrono>
 
 // Darknet detection
@@ -140,12 +144,16 @@ private:
     std::vector<geometry_msgs::TransformStamped> camera_tfs;
     std::vector<geometry_msgs::TransformStamped> inv_robot_tfs;
     std::vector<geometry_msgs::TransformStamped> inv_camera_tfs;
+    std::vector<sensor_msgs::Image> images;
+    std::vector<sensor_msgs::CompressedImage> cmpr_images;
 
     ros::Publisher cloud_pub;
     ros::Publisher raw_cloud_pub;
     ros::Publisher tgt_position_pub;
     std::vector<ros::Publisher> poses_puber;
     std::vector<ros::Publisher> fov_pc_puber;
+    std::vector<ros::Publisher> img_puber;
+    std::vector<ros::Publisher> cimg_puber;
   } TargetDetection;
 
   // class variables
@@ -167,6 +175,7 @@ private:
 
   // Service
   ros::ServiceServer save_server_;
+  ros::ServiceClient snapshot_client_;
 
   // Initialize transform listener
   tf2_ros::Buffer tf_buffer_;

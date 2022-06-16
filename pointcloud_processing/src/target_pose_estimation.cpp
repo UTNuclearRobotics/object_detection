@@ -55,6 +55,8 @@ TargetPoseEstimation::TargetPoseEstimation() : nh_(""), private_nh_("~")
 
   if (debug_viz_) {
     utgt_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("utgt", 1, true);
+
+    snapshot_client_ = nh_.serviceClient<image_processing::Snapshot>("image_snapshot");
   }
 }
 
@@ -231,6 +233,25 @@ void TargetPoseEstimation::initiateDetections()
             ("tgt" + std::to_string(target_detections_.size() + 1) + "_" + new_tgt.target_class +
              "_fov_pc1"),
             1, true));
+          new_tgt.img_puber.push_back(nh_.advertise<sensor_msgs::Image>(
+            ("tgt" + std::to_string(target_detections_.size() + 1) + "_" + new_tgt.target_class +
+             "_img1"),
+            1, true));
+          new_tgt.cimg_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>(
+            ("tgt" + std::to_string(target_detections_.size() + 1) + "_" + new_tgt.target_class +
+             "_cmpr_img1"),
+            1, true));
+
+          image_processing::Snapshot snapshot;
+          if (snapshot_client_ && snapshot_client_.call(snapshot)) {
+            if (snapshot.response.img_valid) {
+              new_tgt.images.push_back(snapshot.response.img);
+            }
+
+            if (snapshot.response.cimg_valid) {
+              new_tgt.cmpr_images.push_back(snapshot.response.cimg);
+            }
+          }
 
           geometry_msgs::PoseStamped temp_pose;
           temp_pose.header.stamp = ros::Time::now();
@@ -870,6 +891,25 @@ void TargetPoseEstimation::updateRegisteredTarget(
       ("tgt" + std::to_string(tgt_index + 1) + "_" + target_detections_[tgt_index].target_class +
        "_fov_pc" + std::to_string(target_detections_[tgt_index].camera_tfs.size())),
       1, true));
+    target_detections_[tgt_index].img_puber.push_back(nh_.advertise<sensor_msgs::Image>(
+      ("tgt" + std::to_string(tgt_index + 1) + "_" + target_detections_[tgt_index].target_class +
+       "_img" + std::to_string(target_detections_[tgt_index].camera_tfs.size())),
+      1, true));
+    target_detections_[tgt_index].cimg_puber.push_back(nh_.advertise<sensor_msgs::CompressedImage>(
+      ("tgt" + std::to_string(tgt_index + 1) + "_" + target_detections_[tgt_index].target_class +
+       "_cmpr_img" + std::to_string(target_detections_[tgt_index].camera_tfs.size())),
+      1, true));
+
+    image_processing::Snapshot snapshot;
+    if (snapshot_client_ && snapshot_client_.call(snapshot)) {
+      if (snapshot.response.img_valid) {
+        target_detections_[tgt_index].images.push_back(snapshot.response.img);
+      }
+
+      if (snapshot.response.cimg_valid) {
+        target_detections_[tgt_index].cmpr_images.push_back(snapshot.response.cimg);
+      }
+    }
 
     geometry_msgs::PoseStamped temp_pose;
     temp_pose.header.stamp = ros::Time::now();
@@ -1037,6 +1077,18 @@ void TargetPoseEstimation::saveBag()
       bag.write(
         tgt.target_class + std::to_string(tgt.target_id) + "_camera_tf" + std::to_string(i + 1),
         now, tgt.inv_camera_tfs[i]);
+    }
+
+    for (int i = 0; i < tgt.images.size(); ++i) {
+      bag.write(
+        tgt.target_class + std::to_string(tgt.target_id) + "_image" + std::to_string(i + 1), now,
+        tgt.images[i]);
+    }
+
+    for (int i = 0; i < tgt.cmpr_images.size(); ++i) {
+      bag.write(
+        tgt.target_class + std::to_string(tgt.target_id) + "_cmpr_image" + std::to_string(i + 1),
+        now, tgt.cmpr_images[i]);
     }
   }
   bag.close();

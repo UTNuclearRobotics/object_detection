@@ -25,6 +25,7 @@
   <depend>tf2_sensor_msgs</depend>
   <depend>vision_msgs</depend>
   <depend>image_transport</depend>
+  <depend>image_processing</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
