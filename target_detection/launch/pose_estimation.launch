@@ -14,6 +14,7 @@
       <remap from="camera_info" to="realsense_front/color/camera_info"/>
       <remap from="bounding_boxes" to="darknet_ros/bounding_boxes"/>
       <remap from="pointcloud" to="lidar_points"/>
+      <remap from="image_snapshot" to="image_snapshot/send_snapshot"/>
     </node>
   </group>
 
