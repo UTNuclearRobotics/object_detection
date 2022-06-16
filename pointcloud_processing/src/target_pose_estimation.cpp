@@ -234,29 +234,31 @@ void TargetPoseEstimation::initiateDetections()
             ("tgt" + std::to_string(target_detections_.size() + 1) + "_" + new_tgt.target_class +
              "_fov_pc1"),
             1, true));
-          new_tgt.img_puber.push_back(nh_.advertise<sensor_msgs::Image>(
-            ("tgt" + std::to_string(target_detections_.size() + 1) + "_" + new_tgt.target_class +
-             "_img1"),
-            1, true));
-          new_tgt.cimg_puber.push_back(nh_.advertise<sensor_msgs::CompressedImage>(
-            ("tgt" + std::to_string(target_detections_.size() + 1) + "_" + new_tgt.target_class +
-             "_cmpr_img1"),
-            1, true));
 
           image_processing::Snapshot snapshot;
           if (snapshot_client_.call(snapshot)) {
             if (snapshot.response.img_valid) {
+              new_tgt.img_puber.push_back(nh_.advertise<sensor_msgs::Image>(
+                ("tgt" + std::to_string(target_detections_.size() + 1) + "_" +
+                 new_tgt.target_class + "_img1"),
+                1, true));
+
               new_tgt.images.push_back(snapshot.response.img);
+              new_tgt.img_puber[0].publish(new_tgt.images[0]);
             }
 
             if (snapshot.response.cimg_valid) {
+              new_tgt.cimg_puber.push_back(nh_.advertise<sensor_msgs::CompressedImage>(
+                ("tgt" + std::to_string(target_detections_.size() + 1) + "_" +
+                 new_tgt.target_class + "_cmpr_img1"),
+                1, true));
+
               new_tgt.cmpr_images.push_back(snapshot.response.cimg);
+              new_tgt.cimg_puber[0].publish(new_tgt.cmpr_images[0]);
             }
           } else {
             ROS_DEBUG("Image Snapshot failed to call");
           }
-          new_tgt.img_puber[0].publish(new_tgt.images[0]);
-          new_tgt.cimg_puber[0].publish(new_tgt.cmpr_images[0]);
 
           geometry_msgs::PoseStamped temp_pose;
           temp_pose.header.stamp = ros::Time::now();
@@ -896,35 +898,41 @@ void TargetPoseEstimation::updateRegisteredTarget(
       ("tgt" + std::to_string(tgt_index + 1) + "_" + target_detections_[tgt_index].target_class +
        "_fov_pc" + std::to_string(target_detections_[tgt_index].camera_tfs.size())),
       1, true));
-    target_detections_[tgt_index].img_puber.push_back(nh_.advertise<sensor_msgs::Image>(
-      ("tgt" + std::to_string(tgt_index + 1) + "_" + target_detections_[tgt_index].target_class +
-       "_img" + std::to_string(target_detections_[tgt_index].camera_tfs.size())),
-      1, true));
-    target_detections_[tgt_index].cimg_puber.push_back(nh_.advertise<sensor_msgs::CompressedImage>(
-      ("tgt" + std::to_string(tgt_index + 1) + "_" + target_detections_[tgt_index].target_class +
-       "_cmpr_img" + std::to_string(target_detections_[tgt_index].camera_tfs.size())),
-      1, true));
 
     image_processing::Snapshot snapshot;
     if (snapshot_client_.call(snapshot)) {
       if (snapshot.response.img_valid) {
+        target_detections_[tgt_index].img_puber.push_back(nh_.advertise<sensor_msgs::Image>(
+          ("tgt" + std::to_string(tgt_index + 1) + "_" +
+           target_detections_[tgt_index].target_class + "_img" +
+           std::to_string(target_detections_[tgt_index].camera_tfs.size())),
+          1, true));
+
         target_detections_[tgt_index].images.push_back(snapshot.response.img);
+        target_detections_[tgt_index]
+          .img_puber[target_detections_[tgt_index].img_puber.size() - 1]
+          .publish(
+            target_detections_[tgt_index].images[target_detections_[tgt_index].images.size() - 1]);
       }
 
       if (snapshot.response.cimg_valid) {
+        target_detections_[tgt_index].cimg_puber.push_back(
+          nh_.advertise<sensor_msgs::CompressedImage>(
+            ("tgt" + std::to_string(tgt_index + 1) + "_" +
+             target_detections_[tgt_index].target_class + "_cmpr_img" +
+             std::to_string(target_detections_[tgt_index].camera_tfs.size())),
+            1, true));
+
         target_detections_[tgt_index].cmpr_images.push_back(snapshot.response.cimg);
+        target_detections_[tgt_index]
+          .cimg_puber[target_detections_[tgt_index].cimg_puber.size() - 1]
+          .publish(target_detections_[tgt_index]
+                     .cmpr_images[target_detections_[tgt_index].cmpr_images.size() - 1]);
       }
+
     } else {
       ROS_DEBUG("Image Snapshot failed to call");
     }
-    target_detections_[tgt_index]
-      .img_puber[target_detections_[tgt_index].img_puber.size() - 1]
-      .publish(
-        target_detections_[tgt_index].images[target_detections_[tgt_index].images.size() - 1]);
-    target_detections_[tgt_index]
-      .cimg_puber[target_detections_[tgt_index].cimg_puber.size() - 1]
-      .publish(target_detections_[tgt_index]
-                 .cmpr_images[target_detections_[tgt_index].cmpr_images.size() - 1]);
 
     geometry_msgs::PoseStamped temp_pose;
     temp_pose.header.stamp = ros::Time::now();
