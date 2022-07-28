@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////////////
-//      Title     : target_pose_estimation.h
+//      Title     : object_pose_estimation.h
 //      Platforms : Ubuntu 64-bit
 //      Copyright : Copyright© The University of Texas at Austin, 2021. All rights reserved.
 //
@@ -72,16 +72,16 @@
  * 
 */
 
-namespace target_detection
+namespace object_detection
 {
-class TargetPoseEstimation
+class ObjectPoseEstimation
 {
 public:
   // basic constructor
-  TargetPoseEstimation();
+  ObjectPoseEstimation();
 
   // destructor
-  ~TargetPoseEstimation();
+  ~ObjectPoseEstimation();
 
   // typedefs
   typedef pcl::PointXYZRGB PointType;
@@ -102,7 +102,7 @@ public:
   ObjectsMap convertClassesMap(std::map<std::string, std::string> input);
 
   /**
-   * @brief Runs all of the top level detection code.  Initiates and manages the target detection demo
+   * @brief Runs all of the top level detection code.  Initiates and manages the object detection demo
    */
   void initiateDetections();
 
@@ -119,7 +119,7 @@ private:
 
   typedef struct
   {
-    std::string target_class;
+    std::string object_class;
     sensor_msgs::PointCloud2 cloud;        // cloud should be in map frame
     geometry_msgs::PointStamped position;  // should be in map frame
     geometry_msgs::TransformStamped robot_tf;
@@ -132,8 +132,8 @@ private:
 
   typedef struct
   {
-    int target_id;
-    std::string target_class;
+    int object_id;
+    std::string object_class;
     geometry_msgs::PointStamped position;
     sensor_msgs::PointCloud2 cloud;      // filtered cloud in map frame
     sensor_msgs::PointCloud2 raw_cloud;  // cloud of all raw data in map frame with no filtering
@@ -149,12 +149,12 @@ private:
 
     ros::Publisher cloud_pub;
     ros::Publisher raw_cloud_pub;
-    ros::Publisher tgt_position_pub;
+    ros::Publisher obj_position_pub;
     std::vector<ros::Publisher> poses_puber;
     std::vector<ros::Publisher> fov_pc_puber;
     std::vector<ros::Publisher> img_puber;
     std::vector<ros::Publisher> cimg_puber;
-  } TargetDetection;
+  } ObjectDetection;
 
   // class variables
   bool debug_viz_;
@@ -168,7 +168,7 @@ private:
   ros::NodeHandle private_nh_;
 
   // Publishers
-  ros::Publisher detected_objects_pub_, lidar_fov_pub_, lidar_bbox_pub_, utgt_pub_, detection_pub_;
+  ros::Publisher detected_objects_pub_, lidar_fov_pub_, lidar_bbox_pub_, uobj_pub_, detection_pub_;
 
   // Subscribers
   ros::Subscriber bbox_sub_, cloud_sub_, camera_info_sub_;
@@ -185,9 +185,9 @@ private:
   darknet_ros_msgs::BoundingBoxes current_boxes_;
   sensor_msgs::CameraInfo camera_info_;
 
-  // target detection variables
-  std::vector<TargetPoseEstimation::UnassignedDetection> unassigned_detections_;
-  std::vector<TargetPoseEstimation::TargetDetection> target_detections_;
+  // object detection variables
+  std::vector<ObjectPoseEstimation::UnassignedDetection> unassigned_detections_;
+  std::vector<ObjectPoseEstimation::ObjectDetection> object_detections_;
 
   // debug timers
   std::chrono::high_resolution_clock debug_clock_;
@@ -277,7 +277,7 @@ private:
     const CloudPtr input, const std::vector<PixelCoords> & pixel_coordinates, const int xmin,
     const int xmax, const int ymin, const int ymax);
 
-  bool transformPointCloud2(sensor_msgs::PointCloud2 & pointcloud, const std::string target_frame);
+  bool transformPointCloud2(sensor_msgs::PointCloud2 & pointcloud, const std::string object_frame);
 
   geometry_msgs::TransformStamped invertTransform(const geometry_msgs::TransformStamped & tf_ins);
 
@@ -289,46 +289,46 @@ private:
   void pointCloudCb(sensor_msgs::PointCloud2 input_cloud);
 
   /**
-   * @brief Determines if the cloud_in can be matched to any target in the target_detections_ vector that is of the same target_class passed in.
-   * @param target_class The class of the target ("chair", "fire hydrant", "microwave", ...etc)
-   * @param cloud_in The cloud of the unassigned target in the map frame.  This cloud must be reduced down to the bounding box of the target otherwise it isn't that useful.
-   * @return Returns target_id of target in the target_detections_ vector if position is within dist threshold.  Returns 0 if not matched.
+   * @brief Determines if the cloud_in can be matched to any object in the object_detections_ vector that is of the same object_class passed in.
+   * @param object_class The class of the object ("chair", "fire hydrant", "microwave", ...etc)
+   * @param cloud_in The cloud of the unassigned object in the map frame.  This cloud must be reduced down to the bounding box of the object otherwise it isn't that useful.
+   * @return Returns object_id of object in the object_detections_ vector if position is within dist threshold.  Returns 0 if not matched.
     */
-  int isRegisteredTarget(const std::string target_class, sensor_msgs::PointCloud2 cloud_in);
+  int isRegisteredObject(const std::string object_class, sensor_msgs::PointCloud2 cloud_in);
 
   /**
-   * @brief Determines if the position in pos_in is close to a target of type target_class
-   * @param target_class The class of the target ("chair", "fire hydrant", "microwave", ...etc)
-   * @param pos_in The current position of the target to compare against in the map frame
+   * @brief Determines if the position in pos_in is close to a object of type object_class
+   * @param object_class The class of the object ("chair", "fire hydrant", "microwave", ...etc)
+   * @param pos_in The current position of the object to compare against in the map frame
    * @param dist The distance threshold being checked
-   * @return Returns target_id of target in the target_detections_ vector if position is within dist threshold.  Returns 0 if not close enough.
+   * @return Returns object_id of object in the object_detections_ vector if position is within dist threshold.  Returns 0 if not close enough.
    */
-  int isCloseToTarget(
-    const std::string target_class, const geometry_msgs::PointStamped pos_in, const double dist);
+  int isCloseToObject(
+    const std::string object_class, const geometry_msgs::PointStamped pos_in, const double dist);
 
   /**
-   * @brief Update the current vector of targets with newly registered target information
-   * @param utgt The unassigned detection that has been examined and matches with the target in tgt_index
-   * @param tgt_index The INDEX of the target that utgt has been matched with in the target_detections_ vector.  INDEX not ID!!!
+   * @brief Update the current vector of objects with newly registered object information
+   * @param uobj The unassigned detection that has been examined and matches with the object in obj_index
+   * @param obj_index The INDEX of the object that uobj has been matched with in the object_detections_ vector.  INDEX not ID!!!
    */
-  void updateRegisteredTarget(
-    const TargetPoseEstimation::UnassignedDetection utgt, const int tgt_index);
+  void updateRegisteredObject(
+    const ObjectPoseEstimation::UnassignedDetection uobj, const int obj_index);
 
   /**
-   * @brief Convert the target detections data into a Detection3DArray and publish
+   * @brief Convert the object detections data into a Detection3DArray and publish
    */
   void publishDetectionArray();
-  void publishDetection(const int tgt_index);
+  void publishDetection(const int obj_index);
 
   /**
-   * @brief Save the target detections data into bag file
+   * @brief Save the object detections data into bag file
    */
   void saveBag();
 
   /**
-   * @brief Offers a ros service client to trigger a rosbag save of the target detections data
+   * @brief Offers a ros service client to trigger a rosbag save of the object detections data
    */
   bool saveBagClient(std_srvs::Empty::Request & req, std_srvs::Empty::Response & res);
 };
 
-}  // namespace target_detection
+}  // namespace object_detection
