@@ -4,7 +4,7 @@
   <arg name="robot" default="walrus"/>
   <arg name="enable_yolo" default="false"/>
 
-  <include file="$(find target_detection)/launch/pose_estimation.launch">
+  <include file="$(find object_detection)/launch/pose_estimation.launch">
     <arg name="robot" value="$(arg robot)" />
   </include>
 
@@ -13,7 +13,7 @@
   </include>
 
   <group if="$(arg enable_yolo)">
-    <include file="$(find target_detection)/launch/darknet_detection.launch">
+    <include file="$(find object_detection)/launch/darknet_detection.launch">
       <arg name="robot" value="$(arg robot)" />
     </include>
   </group>

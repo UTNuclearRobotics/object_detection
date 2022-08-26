@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>target_detection</name>
+  <name>object_detection</name>
   <version>0.0.0</version>
-  <description>The target detection launch package</description>
+  <description>The object detection launch package</description>
   <maintainer email="chriswsuarez@utexas.edu">Chris Suarez</maintainer>
   <!-- One license tag required, multiple allowed, one license per tag -->
   <!-- Commonly used license strings: -->
