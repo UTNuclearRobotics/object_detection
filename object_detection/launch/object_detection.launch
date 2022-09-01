@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <arg name="robot" default="walrus"/>
+  <arg name="enable_yolo" default="false"/>
+
+  <include file="$(find object_detection)/launch/pose_estimation.launch">
+    <arg name="robot" value="$(arg robot)" />
+  </include>
+
+  <include file="$(find detections_reporting)/launch/hololens.launch">
+    <arg name="robot" value="$(arg robot)" />
+  </include>
+
+  <group if="$(arg enable_yolo)">
+    <include file="$(find object_detection)/launch/darknet_detection.launch">
+      <arg name="robot" value="$(arg robot)" />
+    </include>
+  </group>
+
+</launch>
