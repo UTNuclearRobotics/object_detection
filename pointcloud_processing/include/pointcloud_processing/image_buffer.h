@@ -32,7 +32,7 @@
 #include <ros/ros.h>
 #include <vision_msgs/Detection3D.h>
 
-namespace target_detection
+namespace object_detection
 {
 class ImageBuffer
 {
@@ -54,4 +54,4 @@ private:
   ros::Publisher latest_image_pub_;
 };
 
-}  // namespace target_detection
+}  // namespace object_detection
