@@ -1,22 +1,11 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(image_processing)
 
+add_compile_options(-std=c++11)
 
-if(NOT "${CMAKE_CXX_STANDARD}")
-  set(CMAKE_CXX_STANDARD 14)
-endif()
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# add_compile_options(-std=c++11)
-## Compile as C++11, supported in ROS Kinetic and newer
-# add_compile_options(-std=c++11)
-
-## Find catkin macros and libraries
-## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
-## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   roscpp
-  std_srvs
   image_transport
   message_generation
 )
@@ -38,30 +27,17 @@ generate_messages(
 ## catkin specific configuration ##
 ###################################
 catkin_package(
-  CATKIN_DEPENDS
-  sensor_msgs
-  roscpp
-  std_srvs
-  image_transport
-  message_generation
+  INCLUDE_DIRS include
+  # LIBRARIES
+  CATKIN_DEPENDS sensor_msgs roscpp image_transport message_generation
+  # DEPENDS
 )
 
-###########
-## Build ##
-###########
-
-## Specify additional locations of header files
-## Your package locations should be listed before other locations
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
 )
 
 add_executable(image_snapshot src/image_snapshot.cpp)
-
 target_link_libraries(image_snapshot ${catkin_LIBRARIES})
-
-add_dependencies(image_snapshot ${${PROJECT_NAME}_exported_targets} ${catkin_EXPORTED_TARGETS})
-
-## Add folders to be run by python nosetests
-# catkin_add_nosetests(test)
+add_dependencies(image_snapshot ${${PROJECT_NAME}_exported_targets} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)

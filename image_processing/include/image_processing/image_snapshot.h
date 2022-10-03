@@ -33,7 +33,6 @@
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/CompressedImage.h>
 #include <sensor_msgs/Image.h>
-#include <std_srvs/Empty.h>
 
 /**
  * Node API
