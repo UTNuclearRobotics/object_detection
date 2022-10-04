@@ -78,7 +78,7 @@
     <!-- ###########################  Yolo ############################# -->
     <node pkg="darknet_ros" type="darknet_ros" name="darknet_ros" output="log">
       <rosparam command="load" file="$(find darknet_ros)/config/yolov3.yaml"/>
-      <rosparam command="load" file="$(find target_detection)/config/darknet_ros.yaml"/>
+      <rosparam command="load" file="$(find object_detection)/config/darknet_ros.yaml"/>
       <param name="subscribers/camera_reading/topic" value="/$(arg robot)/$(arg camera)/color/image_raw"/>
 
       <param name="weights_path"          value="$(find darknet_ros)/yolo_network_config/weights" />

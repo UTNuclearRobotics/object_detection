@@ -4,7 +4,7 @@ robot_frame: "walrus/base_link"
 map_frame: "walrus/static_map"
 robot_movement_threshold: 0.05
 confidence_threshold: 0.65
-distance_between_targets: 10.0
+distance_between_objects: 10.0
 new_tgt_dist_limit: 10.0
 bbox_pixel_padding: -50
 bbox_edge: false
@@ -14,8 +14,8 @@ robot_turning_threshold: 0.005
 sleep_period: 0.0
 pointcloud_stale_time: 0.01
 save_bag_on_shutdown: true
-object_classes:
-  barrel: '1'
+object_classes: ["barrel", "suitcase", "truck"]
+
 #  fire hydrant: '1'
 #  car: '2'
 #  truck: '3'

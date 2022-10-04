@@ -27,7 +27,7 @@
 
 #include <pointcloud_processing/image_buffer.h>
 
-namespace target_detection
+namespace object_detection
 {
 ImageBuffer::ImageBuffer() : nh_("~"), image_sub_nh_(nh_)
 {
@@ -50,14 +50,14 @@ void ImageBuffer::detectionsCb(const vision_msgs::Detection3DConstPtr & msg)
   image_callback_queue_.callAvailable();
 }
 
-}  // namespace target_detection
+}  // namespace object_detection
 
 int main(int argc, char ** argv)
 {
   // Initialize ROS
   ros::init(argc, argv, "image_buffer");
 
-  target_detection::ImageBuffer node;
+  object_detection::ImageBuffer node;
 
   ros::spin();
 
