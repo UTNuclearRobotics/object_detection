@@ -1,4 +1,4 @@
-# object Detection package for ROS
+# Object Detection package for ROS
 
 ## Overview
 

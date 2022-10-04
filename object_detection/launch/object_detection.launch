@@ -17,5 +17,4 @@
       <arg name="robot" value="$(arg robot)" />
     </include>
   </group>
-
 </launch>

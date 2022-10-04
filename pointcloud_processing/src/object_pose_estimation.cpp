@@ -86,6 +86,14 @@ void ObjectPoseEstimation::initiateDetections()
   private_nh_.param<double>("distance_between_objects", dist_bet_objs, 10.0);
   private_nh_.param<double>("new_obj_dist_limit", new_obj_dist_limit, 10.0);
 
+  private_nh_.param<int>("bbox_pixel_padding", bbox_pixels_to_pad_, 0);
+  private_nh_.param<double>("pointcloud_stale_time", pcl_stale_time_, 0.05);
+  private_nh_.param<double>("confidence_threshold", detection_confidence_threshold_, 0.75);
+
+  private_nh_.param<bool>("bbox_edge", bbox_edge_, true);
+  private_nh_.param<double>("bbox_edge_x", bbox_edge_x_, 0.1);
+  private_nh_.param<double>("bbox_edge_y", bbox_edge_y_, 0.01);
+
   // init robot pose to map origin wait for robot and camera transforms for a 2.5 minutes then give up
   ROS_INFO_STREAM("Waiting for transform from " << map_frame_ << " to " << robot_frame_);
   try {
@@ -140,7 +148,7 @@ void ObjectPoseEstimation::initiateDetections()
       current_inv_rob_tf_ = updateTf(map_frame_, robot_frame_);
       current_inv_cam_tf_ = updateTf(map_frame_, camera_optical_frame_);
       if (!lidar_frame_.empty()) {
-        current_lidar_tf_ = updateTf(camera_optical_frame_, lidar_frame_);
+        lidar_to_camera_tf_ = updateTf(camera_optical_frame_, lidar_frame_);
       }
 
       if (robotIsTurning(robot_turning_threshold)) {
@@ -151,7 +159,7 @@ void ObjectPoseEstimation::initiateDetections()
       // ROS_DEBUG_STREAM("TIME SPIN: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
     }
 
-    ROS_DEBUG("SHOULD HAVE UNASSIGNED TARGETS NOW");
+    ROS_DEBUG("SHOULD HAVE UNASSIGNED OBJECTS NOW");
 
     // once we have unassigned object detections need to process object comparisons
     if (object_detections_.size() > 0) {
@@ -210,7 +218,7 @@ void ObjectPoseEstimation::initiateDetections()
 
         ObjectPoseEstimation::ObjectDetection new_obj;
         new_obj.object_class = uobj.object_class;
-        new_obj.object_id = object_detections_.size() + 1;
+        new_obj.object_number = object_detections_.size() + 1;
         new_obj.position = uobj.position;
         new_obj.cloud = uobj.cloud;
         new_obj.raw_cloud = uobj.cloud;
@@ -222,7 +230,7 @@ void ObjectPoseEstimation::initiateDetections()
         new_obj.inv_camera_tfs.push_back(current_inv_cam_tf_);
 
         ROS_INFO_STREAM(
-          "Assigning new object: " << new_obj.object_id << " (" << new_obj.object_class << ")");
+          "Assigning new object: " << new_obj.object_number << " (" << new_obj.object_class << ")");
 
         if (debug_viz_) {
           // debugging
@@ -455,41 +463,6 @@ std::vector<ObjectPoseEstimation::PixelCoords> ObjectPoseEstimation::convertClou
 }
 
 /**
-   * @brief Check a map of known object classes to retreive the class ID for an object class name.
-   * @param class_name A known object class name
-   * @param map The map of object class names to class IDs
-   * @return The class ID. -1 indicates that class_name was not a key in the map.
-   */
-ObjectPoseEstimation::ObjectClassID ObjectPoseEstimation::getObjectID(
-  const ObjectPoseEstimation::ObjectClassName class_name,
-  const ObjectPoseEstimation::ObjectsMap & map)
-{
-  ObjectPoseEstimation::ObjectClassID class_id;
-
-  try {
-    class_id = map.at(class_name);
-  } catch (const std::out_of_range & e) {
-    // ROS_ERROR("getObjectID() - No class ID found for name %s", class_name.c_str());
-    // std::cerr << e.what() << '\n';
-    return ObjectPoseEstimation::ObjectClassID(UNKNOWN_OBJECT_ID);
-  }
-
-  return class_id;
-}
-
-ObjectPoseEstimation::ObjectsMap ObjectPoseEstimation::convertClassesMap(
-  std::map<std::string, std::string> input)
-{
-  ObjectPoseEstimation::ObjectsMap output;
-
-  for (const std::map<std::string, std::string>::value_type & pair : input) {
-    output[pair.first] = std::stoi(pair.second);
-  }
-
-  return output;
-}
-
-/**
    * @brief Extract from a pointcloud those points that are within a rectangular bounding box.
    * @param input The input pointcloud
    * @param pixel_coordinates A vector of pixelspace coordinates. These correspond by index
@@ -509,15 +482,12 @@ ObjectPoseEstimation::CloudPtr ObjectPoseEstimation::filterPointsInBox(
   pcl::PointIndices::Ptr indices_in_bbox(new pcl::PointIndices());
   indices_in_bbox->indices.reserve(input->size());
 
-  int pixels_to_pad;
-  private_nh_.param<int>("bbox_pixel_padding", pixels_to_pad, 0);
-
   for (int i = 0; i < pixel_coordinates.size(); ++i) {
     if (
-      pixel_coordinates[i].z > 0 && pixel_coordinates[i].x > (xmin - pixels_to_pad) &&
-      pixel_coordinates[i].x < (xmax + pixels_to_pad) &&
-      pixel_coordinates[i].y > (ymin - pixels_to_pad) &&
-      pixel_coordinates[i].y < (ymax + pixels_to_pad)) {
+      pixel_coordinates[i].z > 0 && pixel_coordinates[i].x > (xmin - bbox_pixels_to_pad_) &&
+      pixel_coordinates[i].x < (xmax + bbox_pixels_to_pad_) &&
+      pixel_coordinates[i].y > (ymin - bbox_pixels_to_pad_) &&
+      pixel_coordinates[i].y < (ymax + bbox_pixels_to_pad_)) {
       indices_in_bbox->indices.push_back(i);
     }
   }
@@ -540,41 +510,6 @@ ObjectPoseEstimation::CloudPtr ObjectPoseEstimation::filterPointsInBox(
   return cloud_in_bbox;
 }
 
-bool ObjectPoseEstimation::transformPointCloud2(
-  sensor_msgs::PointCloud2 & pointcloud, const std::string object_frame)
-{
-  auto t1 = debug_clock_.now();
-  geometry_msgs::TransformStamped transform;
-  try {
-    transform = tf_buffer_.lookupTransform(
-      object_frame, tf2::getFrameId(pointcloud), ros::Time(0), ros::Duration(0.1));
-  } catch (tf2::TransformException & ex) {
-    ROS_WARN("%s", ex.what());
-    return false;
-  }
-
-  tf2::doTransform(pointcloud, pointcloud, transform);
-
-  auto t2 = debug_clock_.now();
-  ROS_DEBUG_STREAM(
-    "TIME TF PC: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
-  return true;
-}
-
-geometry_msgs::TransformStamped ObjectPoseEstimation::invertTransform(
-  const geometry_msgs::TransformStamped & tf_in)
-{
-  tf2::Stamped<tf2::Transform> temp_tf;
-  tf2::fromMsg(tf_in, temp_tf);
-  geometry_msgs::TransformStamped inv_tf;
-  inv_tf.transform = tf2::toMsg(temp_tf.inverse());
-  inv_tf.header.stamp = ros::Time::now();
-  inv_tf.header.frame_id = tf_in.child_frame_id;
-  inv_tf.child_frame_id = tf_in.header.frame_id;
-
-  return inv_tf;
-}
-
 /**
    * @brief Callback function for the pointclouds
    * @details This does the core processing to locate objects in the cloud
@@ -590,9 +525,7 @@ void ObjectPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
     return;
   }
 
-  double stale_time;
-  private_nh_.param<double>("pointcloud_stale_time", stale_time, 0.05);
-  if (ros::Time::now().toSec() - input_cloud.header.stamp.toSec() > stale_time) {
+  if (ros::Time::now().toSec() - input_cloud.header.stamp.toSec() > pcl_stale_time_) {
     ROS_DEBUG_STREAM("POINTCLOUD STALE");
     return;
   }
@@ -607,11 +540,8 @@ void ObjectPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
     return;
   }
 
-  double confidence_threshold;
-  private_nh_.param<double>("confidence_threshold", confidence_threshold, 0.75);
-
   // transform the pointcloud into the RGB optical frame
-  tf2::doTransform(input_cloud, input_cloud, current_lidar_tf_);
+  tf2::doTransform(input_cloud, input_cloud, lidar_to_camera_tf_);
 
   // Convert sensor_msgs::PointCloud2 to pcl::PointCloud
   ObjectPoseEstimation::CloudPtr cloud(new ObjectPoseEstimation::Cloud);
@@ -627,34 +557,26 @@ void ObjectPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
     convertCloudToPixelCoords(cloud_nan_filtered, camera_info_);
 
   // check if any bounding boxes are on or near the edge of the camera image.  If so remove them and return if none left
-  bool bbox_edge;
-  double bbox_edge_x, bbox_edge_y;
-  private_nh_.param<bool>("bbox_edge", bbox_edge, true);
-  private_nh_.param<double>("bbox_edge_x", bbox_edge_x, 0.1);
-  private_nh_.param<double>("bbox_edge_y", bbox_edge_y, 0.01);
-
   /////////////////////////////////////////////////////////////
   for (const darknet_ros_msgs::BoundingBox & box : current_boxes_.bounding_boxes) {
-    const ObjectPoseEstimation::ObjectClassID id = getObjectID(box.Class, object_classes);
-
     // do we meet the threshold for a confirmed detection?
-    if (box.probability >= confidence_threshold && id != UNKNOWN_OBJECT_ID) {
-      if (bbox_edge) {
+    if (box.probability >= detection_confidence_threshold_ && object_classes.count(box.Class)) {
+      if (bbox_edge_) {
         // check for bounding boxes being close to edges
-        if (box.xmin < camera_info_.width * bbox_edge_x) {
+        if (box.xmin < camera_info_.width * bbox_edge_x_) {
           ROS_DEBUG("BBOX EDGE LEFT");
           continue;
         }
-        if (box.xmax > (camera_info_.width - (camera_info_.width * bbox_edge_x))) {
+        if (box.xmax > (camera_info_.width - (camera_info_.width * bbox_edge_x_))) {
           ROS_DEBUG("BBOX EDGE RIGHT");
           continue;
         }
 
-        if (box.ymin < camera_info_.height * bbox_edge_y) {
+        if (box.ymin < camera_info_.height * bbox_edge_y_) {
           ROS_DEBUG("BBOX EDGE TOP");
           continue;
         }
-        if (box.ymax > (camera_info_.height - (camera_info_.height * bbox_edge_y))) {
+        if (box.ymax > (camera_info_.height - (camera_info_.height * bbox_edge_y_))) {
           ROS_DEBUG("BBOX EDGE BOTTOM");
           continue;
         }
@@ -713,7 +635,7 @@ void ObjectPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
    * @brief Determines if the cloud_in can be matched to any object in the object_detections_ vector that is of the same object_class passed in.
    * @param object_class The class of the object ("chair", "fire hydrant", "microwave", ...etc)
    * @param cloud_in The cloud of the unassigned object in the map frame.  This cloud must be reduced down to the bounding box of the object otherwise it isn't that useful.
-   * @return Returns object_id of object in the object_detections_ vector if position is within dist threshold.  Returns 0 if not matched.
+   * @return Returns object_number of object in the object_detections_ vector if position is within dist threshold.  Returns 0 if not matched.
     */
 int ObjectPoseEstimation::isRegisteredObject(
   const std::string object_class, sensor_msgs::PointCloud2 cloud_in)
@@ -722,7 +644,7 @@ int ObjectPoseEstimation::isRegisteredObject(
 
   for (const ObjectPoseEstimation::ObjectDetection & obj : object_detections_) {
     if (object_class != obj.object_class) {
-      ROS_DEBUG_STREAM("UOBJ Does not match object class from OBJ " << obj.object_id);
+      ROS_DEBUG_STREAM("UOBJ Does not match object class from OBJ " << obj.object_number);
       ROS_DEBUG_STREAM("UOBJ Class: " << object_class << " OBJ Class: " << obj.object_class);
       continue;
     }
@@ -759,13 +681,13 @@ int ObjectPoseEstimation::isRegisteredObject(
     }
     // if we made it through the last loop without breaking then it is a obj match and return the associated object
     if (obj_match) {
-      ROS_DEBUG_STREAM("OBJ MATCHED TO: " << obj.object_id);
+      ROS_DEBUG_STREAM("OBJ MATCHED TO: " << obj.object_number);
       auto t2 = debug_clock_.now();
       ROS_DEBUG_STREAM(
         "TIME IS REGISTERED OBJ: "
         << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
 
-      return obj.object_id;
+      return obj.object_number;
     }
   }
   auto t2 = debug_clock_.now();
@@ -780,7 +702,7 @@ int ObjectPoseEstimation::isRegisteredObject(
    * @param object_class The class of the object ("chair", "fire hydrant", "microwave", ...etc)
    * @param pos_in The current position of the object to compare against in the map frame
    * @param dist The distance threshold being checked
-   * @return Returns object_id of object in the object_detections_ vector if position is within dist threshold.  Returns 0 if not close enough.
+   * @return Returns object_number of object in the object_detections_ vector if position is within dist threshold.  Returns 0 if not close enough.
    */
 int ObjectPoseEstimation::isCloseToObject(
   const std::string object_class, const geometry_msgs::PointStamped pos_in, const double dist)
@@ -802,7 +724,7 @@ int ObjectPoseEstimation::isCloseToObject(
       ROS_DEBUG_STREAM(
         "TIME IS CLOSE OBJ: "
         << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
-      return obj.object_id;
+      return obj.object_number;
     }
   }
 
@@ -977,7 +899,8 @@ void ObjectPoseEstimation::publishDetectionArray()
     object.header.stamp = ros::Time::now();
 
     vision_msgs::ObjectHypothesisWithPose hypothesis;
-    hypothesis.id = object_classes[obj.object_class];
+    hypothesis.id = -1;
+    // We are only using object classes as strings so they do not have an associated integer ID
     hypothesis.score = 1.0;
 
     // This switch isn't working properly for some reason
@@ -1014,7 +937,7 @@ void ObjectPoseEstimation::publishDetectionArray()
     object.bbox.size.y = max_pt.y - min_pt.y;
     object.bbox.size.z = max_pt.z - min_pt.z;
 
-    ROS_DEBUG_STREAM("OBJ " << obj.object_id << " 3D BBOX SIZE" << object.bbox.size);
+    ROS_DEBUG_STREAM("OBJ " << obj.object_number << " 3D BBOX SIZE" << object.bbox.size);
     detected_objects.detections.push_back(object);
   }
 
@@ -1035,7 +958,7 @@ void ObjectPoseEstimation::publishDetection(const int obj_index)
 
   // add to the output
   vision_msgs::ObjectHypothesisWithPose hypothesis;
-  hypothesis.id = obj_index + 1;  //object_classes[object_detections_[obj_index].object_class];
+  hypothesis.id = object_detections_[obj_index].object_id;
   hypothesis.score = 1.0;
   hypothesis.pose.pose.position = object_detections_[obj_index].position.point;
   hypothesis.pose.pose.orientation.x = 0;
@@ -1063,7 +986,8 @@ void ObjectPoseEstimation::publishDetection(const int obj_index)
   detection.bbox.size.z = max_pt.z - min_pt.z;
 
   ROS_DEBUG_STREAM(
-    "OBJ " << object_detections_[obj_index].object_id << " 3D BBOX SIZE" << detection.bbox.size);
+    "OBJ " << object_detections_[obj_index].object_number << " 3D BBOX SIZE"
+           << detection.bbox.size);
 
   // publish results
   detection_pub_.publish(detection);
@@ -1079,38 +1003,41 @@ void ObjectPoseEstimation::saveBag()
   auto now = ros::Time::now();
 
   for (const ObjectPoseEstimation::ObjectDetection & obj : object_detections_) {
-    bag.write(obj.object_class + std::to_string(obj.object_id) + "_cloud", now, obj.cloud);
-    bag.write(obj.object_class + std::to_string(obj.object_id) + "_raw_cloud", now, obj.raw_cloud);
-    bag.write(obj.object_class + std::to_string(obj.object_id) + "_position", now, obj.position);
+    bag.write(obj.object_class + std::to_string(obj.object_number) + "_cloud", now, obj.cloud);
+    bag.write(
+      obj.object_class + std::to_string(obj.object_number) + "_raw_cloud", now, obj.raw_cloud);
+    bag.write(
+      obj.object_class + std::to_string(obj.object_number) + "_position", now, obj.position);
 
     for (int i = 0; i < obj.fov_clouds.size(); ++i) {
       bag.write(
-        obj.object_class + std::to_string(obj.object_id) + "_fov" + std::to_string(i + 1) +
+        obj.object_class + std::to_string(obj.object_number) + "_fov" + std::to_string(i + 1) +
           "_cloud",
         now, obj.fov_clouds[i]);
     }
 
     for (int i = 0; i < obj.inv_robot_tfs.size(); ++i) {
       bag.write(
-        obj.object_class + std::to_string(obj.object_id) + "_robot_tf" + std::to_string(i + 1), now,
-        obj.robot_tfs[i]);
+        obj.object_class + std::to_string(obj.object_number) + "_robot_tf" + std::to_string(i + 1),
+        now, obj.robot_tfs[i]);
     }
 
     for (int i = 0; i < obj.inv_camera_tfs.size(); ++i) {
       bag.write(
-        obj.object_class + std::to_string(obj.object_id) + "_camera_tf" + std::to_string(i + 1),
+        obj.object_class + std::to_string(obj.object_number) + "_camera_tf" + std::to_string(i + 1),
         now, obj.inv_camera_tfs[i]);
     }
 
     for (int i = 0; i < obj.images.size(); ++i) {
       bag.write(
-        obj.object_class + std::to_string(obj.object_id) + "_image" + std::to_string(i + 1), now,
-        obj.images[i]);
+        obj.object_class + std::to_string(obj.object_number) + "_image" + std::to_string(i + 1),
+        now, obj.images[i]);
     }
 
     for (int i = 0; i < obj.cmpr_images.size(); ++i) {
       bag.write(
-        obj.object_class + std::to_string(obj.object_id) + "_cmpr_image" + std::to_string(i + 1),
+        obj.object_class + std::to_string(obj.object_number) + "_cmpr_image" +
+          std::to_string(i + 1),
         now, obj.cmpr_images[i]);
     }
   }
@@ -1143,19 +1070,25 @@ int main(int argc, char ** argv)
 
   object_detection::ObjectPoseEstimation node;
 
-  std::map<std::string, std::string> temp_map;
-  if (!node.nh_.hasParam("object_pose_estimation/object_classes")) {
-    ROS_ERROR("Failed to load dictionary parameter 'object_classes'.");
-    return 1;
+  std::vector<std::string> object_classes;
+  while (!node.nh_.hasParam("object_pose_estimation/object_classes")) {
+    ROS_ERROR(
+      "Waiting for 'object_classes' parameter to begin object detection search and pose "
+      "estimation.");
+    ros::Duration(3.0).sleep();
   }
-  node.nh_.getParam("object_pose_estimation/object_classes", temp_map);
+  node.nh_.getParam("object_pose_estimation/object_classes", object_classes);
 
-  try {
-    node.object_classes = node.convertClassesMap(temp_map);
-  } catch (std::invalid_argument ex) {
-    ROS_FATAL("Invalid object_classes parameter.");
+  if (object_classes.empty()) {
+    ROS_FATAL(
+      "'object_classes' parameter is empty.  This means there are no object types to search for.  "
+      "Shutting down node.");
     return 1;
   }
+
+  std::copy(
+    object_classes.begin(), object_classes.end(),
+    std::inserter(node.object_classes, node.object_classes.end()));
 
   node.initiateDetections();
 
