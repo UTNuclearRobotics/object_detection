@@ -895,7 +895,8 @@ void ObjectPoseEstimation::publishDetectionArray()
   for (const ObjectPoseEstimation::ObjectDetection & obj : object_detections_) {
     // add to the output
     vision_msgs::Detection3D object;
-    object.header.frame_id = map_frame_;
+    object.header.frame_id = obj.object_class + "-" + map_frame_;
+
     object.header.stamp = ros::Time::now();
 
     vision_msgs::ObjectHypothesisWithPose hypothesis;
@@ -953,8 +954,7 @@ void ObjectPoseEstimation::publishDetection(const int obj_index)
   // output
   vision_msgs::Detection3D detection;
   detection.header.stamp = ros::Time::now();
-  // detection.header.frame_id = map_frame_;
-  detection.header.frame_id = object_detections_[obj_index].object_class;
+  detection.header.frame_id = object_detections_[obj_index].object_class + "-" + map_frame_;
 
   // add to the output
   vision_msgs::ObjectHypothesisWithPose hypothesis;
