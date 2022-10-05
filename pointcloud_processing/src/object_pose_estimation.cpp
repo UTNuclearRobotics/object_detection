@@ -54,7 +54,7 @@ ObjectPoseEstimation::ObjectPoseEstimation() : nh_(""), private_nh_("~")
   ROS_DEBUG_STREAM("CAMERA OPT FRAME PARAM: " << camera_optical_frame_);
 
   if (debug_viz_) {
-    uobj_pub_ = nh_.advertise<sensor_msgs::PointCloud2>("uobj", 1, true);
+    uobj_pub_ = private_nh_.advertise<sensor_msgs::PointCloud2>("uobj_cloud", 1, true);
 
     snapshot_client_ =
       nh_.serviceClient<image_processing::Snapshot>("image_snapshot/send_snapshot");
