@@ -3,7 +3,7 @@
   <name>pointcloud_processing</name>
   <version>0.0.0</version>
   <description>The pointcloud_processing package</description>
-  <maintainer email="steveminq@utexas.edu">Minkyu Kim</maintainer>
+  <maintainer email="chriswsuarez@utexas.edu">Chris Suarez</maintainer>
   <!-- One license tag required, multiple allowed, one license per tag -->
   <!-- Commonly used license strings: -->
   <!--   BSD, MIT, Boost Software License, GPLv2, GPLv3, LGPLv2.1, LGPLv3 -->
@@ -26,6 +26,7 @@
   <depend>vision_msgs</depend>
   <depend>image_transport</depend>
   <depend>image_processing</depend>
+  <depend>detection_msgs</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include <detection_msgs/DetectionArray.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
@@ -139,26 +140,30 @@ private:
     sensor_msgs::PointCloud2 cloud;      // filtered cloud in map frame
     sensor_msgs::PointCloud2 raw_cloud;  // cloud of all raw data in map frame with no filtering
     std::vector<darknet_ros_msgs::BoundingBox> bboxes;
-    std::vector<sensor_msgs::PointCloud2>
-      fov_clouds;  // these clouds must be saved in the map frame
-    std::vector<geometry_msgs::TransformStamped> robot_tfs;
     std::vector<geometry_msgs::TransformStamped> camera_tfs;
-    std::vector<geometry_msgs::TransformStamped> inv_robot_tfs;
     std::vector<geometry_msgs::TransformStamped> inv_camera_tfs;
-    std::vector<sensor_msgs::Image> images;
-    std::vector<sensor_msgs::CompressedImage> cmpr_images;
-
     ros::Publisher cloud_pub;
     ros::Publisher raw_cloud_pub;
     ros::Publisher obj_position_pub;
+
+    // The data below is only stored when save_all_detection_data is true
+    std::vector<geometry_msgs::TransformStamped> robot_tfs;
+    std::vector<geometry_msgs::TransformStamped> inv_robot_tfs;
+
+    std::vector<sensor_msgs::PointCloud2>
+      fov_clouds;  // these clouds must be saved in the map frame
+    // std::vector<sensor_msgs::Image> images;
+    std::vector<sensor_msgs::CompressedImage> cmpr_images;
+
+    // The data below is only stored when publish_all_detection_data is true
     std::vector<ros::Publisher> poses_puber;
     std::vector<ros::Publisher> fov_pc_puber;
-    std::vector<ros::Publisher> img_puber;
+    // std::vector<ros::Publisher> img_puber;
     std::vector<ros::Publisher> cimg_puber;
   } ObjectDetection;
 
   // class variables
-  bool debug_viz_, bbox_edge_;
+  bool save_det_data_, pub_det_data_, bbox_edge_;
   geometry_msgs::TransformStamped current_robot_tf_, current_camera_tf_, prev_robot_tf_,
     current_inv_cam_tf_, current_inv_rob_tf_, lidar_to_camera_tf_;
   int bbox_pixels_to_pad_;
@@ -171,7 +176,7 @@ private:
   ros::NodeHandle private_nh_;
 
   // Publishers
-  ros::Publisher detected_objects_pub_, lidar_fov_pub_, lidar_bbox_pub_, uobj_pub_, detection_pub_;
+  ros::Publisher detected_objects_pub_, lidar_fov_pub_, lidar_bbox_pub_, detection_pub_;
 
   // Subscribers
   ros::Subscriber bbox_sub_, cloud_sub_, camera_info_sub_;

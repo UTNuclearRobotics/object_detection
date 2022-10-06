@@ -8,7 +8,7 @@
     <arg name="robot" value="$(arg robot)" />
   </include>
 
-  <include file="$(find detections_reporting)/launch/hololens.launch">
+  <include file="$(find detections_reporting)/launch/detection_report.launch">
     <arg name="robot" value="$(arg robot)" />
   </include>
 

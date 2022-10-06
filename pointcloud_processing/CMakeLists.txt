@@ -26,6 +26,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   image_transport
   image_processing
+  detection_msgs
 )
 
 # # System dependencies are found with CMake's conventions
@@ -49,6 +50,7 @@ catkin_package(
   geometry_msgs
   image_transport
   image_processing
+  detection_msgs
 )
 
 # ##########

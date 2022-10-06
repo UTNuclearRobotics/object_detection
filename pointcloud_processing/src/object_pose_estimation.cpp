@@ -36,29 +36,26 @@ ObjectPoseEstimation::ObjectPoseEstimation() : nh_(""), private_nh_("~")
   cloud_sub_ = nh_.subscribe("pointcloud", 1, &ObjectPoseEstimation::pointCloudCb, this);
   camera_info_sub_ = nh_.subscribe("camera_info", 1, &ObjectPoseEstimation::cameraInfoCb, this);
   detected_objects_pub_ =
-    private_nh_.advertise<vision_msgs::Detection3DArray>("detected_objects", 1);
-  detection_pub_ = private_nh_.advertise<vision_msgs::Detection3D>("detection", 1);
+    private_nh_.advertise<detection_msgs::DetectionArray>("detected_objects", 1);
+  detection_pub_ = private_nh_.advertise<detection_msgs::Detection>("detection", 1);
 
   save_server_ =
     private_nh_.advertiseService("save_bag", &ObjectPoseEstimation::saveBagClient, this);
 
-  private_nh_.param<bool>("debug_viz", debug_viz_, true);
+  private_nh_.param<bool>("save_all_detection_data", save_det_data_, true);
+  private_nh_.param<bool>("publish_all_detection_data", pub_det_data_, false);
   private_nh_.param<std::string>("map_frame", map_frame_, "map");
   private_nh_.param<std::string>("robot_frame", robot_frame_, "base_link");
   private_nh_.param<std::string>(
     "camera_optical_frame", camera_optical_frame_, "camera_optical_link");
 
-  ROS_DEBUG_STREAM("DEBUG PARAM: " << debug_viz_);
+  ROS_DEBUG_STREAM("DEBUG PARAM: " << save_det_data_);
+  ROS_DEBUG_STREAM("DEBUG PARAM: " << pub_det_data_);
   ROS_DEBUG_STREAM("MAP FRAME PARAM: " << map_frame_);
   ROS_DEBUG_STREAM("ROBOT FRAME PARAM: " << robot_frame_);
   ROS_DEBUG_STREAM("CAMERA OPT FRAME PARAM: " << camera_optical_frame_);
 
-  if (debug_viz_) {
-    uobj_pub_ = private_nh_.advertise<sensor_msgs::PointCloud2>("uobj_cloud", 1, true);
-
-    snapshot_client_ =
-      nh_.serviceClient<image_processing::Snapshot>("image_snapshot/send_snapshot");
-  }
+  snapshot_client_ = nh_.serviceClient<image_processing::Snapshot>("image_snapshot/send_snapshot");
 }
 
 // destructor
@@ -223,88 +220,96 @@ void ObjectPoseEstimation::initiateDetections()
         new_obj.cloud = uobj.cloud;
         new_obj.raw_cloud = uobj.cloud;
         new_obj.bboxes.push_back(uobj.bbox);
-        new_obj.fov_clouds.push_back(uobj.cloud);
-        new_obj.robot_tfs.push_back(current_robot_tf_);
         new_obj.camera_tfs.push_back(current_camera_tf_);
-        new_obj.inv_robot_tfs.push_back(current_inv_rob_tf_);
         new_obj.inv_camera_tfs.push_back(current_inv_cam_tf_);
+
+        new_obj.obj_position_pub = nh_.advertise<geometry_msgs::PointStamped>(
+          ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class +
+           "_pos"),
+          1, true);
+        new_obj.cloud_pub = nh_.advertise<sensor_msgs::PointCloud2>(
+          ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class), 1,
+          true);
+        new_obj.raw_cloud_pub = nh_.advertise<sensor_msgs::PointCloud2>(
+          ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class +
+           "_raw"),
+          1, true);
+
+        ROS_DEBUG_STREAM("PUBLISHING NEW OBJ");
+        ROS_DEBUG_STREAM(new_obj.cloud.header);
+        new_obj.obj_position_pub.publish(new_obj.position);
+        new_obj.cloud_pub.publish(new_obj.cloud);
+        new_obj.raw_cloud_pub.publish(new_obj.cloud);
 
         ROS_INFO_STREAM(
           "Assigning new object: " << new_obj.object_number << " (" << new_obj.object_class << ")");
 
-        if (debug_viz_) {
-          // debugging
-          new_obj.poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>(
-            ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class +
-             "_pose1"),
-            1, true));
-          new_obj.fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>(
-            ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class +
-             "_fov_pc1"),
-            1, true));
+        if (save_det_data_) {
+          new_obj.robot_tfs.push_back(current_robot_tf_);
+          new_obj.inv_robot_tfs.push_back(current_inv_rob_tf_);
+          new_obj.fov_clouds.push_back(uobj.cloud);
 
           image_processing::Snapshot snapshot;
           if (snapshot_client_.call(snapshot)) {
-            if (snapshot.response.img_valid) {
-              new_obj.img_puber.push_back(nh_.advertise<sensor_msgs::Image>(
-                ("obj" + std::to_string(object_detections_.size() + 1) + "_" +
-                 new_obj.object_class + "_img1"),
-                1, true));
+            // if (snapshot.response.img_valid) {
+            //   new_obj.images.push_back(snapshot.response.img);
 
-              new_obj.images.push_back(snapshot.response.img);
-              new_obj.img_puber[0].publish(new_obj.images[0]);
-            }
+            //   if (pub_det_data_) {
+            //     new_obj.img_puber.push_back(nh_.advertise<sensor_msgs::Image>(
+            //       ("obj" + std::to_string(object_detections_.size() + 1) + "_" +
+            //        new_obj.object_class + "_img1"),
+            //       1, true));
+
+            //     new_obj.img_puber[0].publish(new_obj.images[0]);
+            //   }
+            // }
 
             if (snapshot.response.cimg_valid) {
-              new_obj.cimg_puber.push_back(nh_.advertise<sensor_msgs::CompressedImage>(
-                ("obj" + std::to_string(object_detections_.size() + 1) + "_" +
-                 new_obj.object_class + "_cmpr_img1"),
-                1, true));
-
               new_obj.cmpr_images.push_back(snapshot.response.cimg);
-              new_obj.cimg_puber[0].publish(new_obj.cmpr_images[0]);
+
+              if (pub_det_data_) {
+                new_obj.cimg_puber.push_back(nh_.advertise<sensor_msgs::CompressedImage>(
+                  ("obj" + std::to_string(object_detections_.size() + 1) + "_" +
+                   new_obj.object_class + "_cmpr_img1"),
+                  1, true));
+
+                new_obj.cimg_puber[0].publish(new_obj.cmpr_images[0]);
+              }
             }
           } else {
             ROS_DEBUG("Image Snapshot failed to call");
           }
 
-          geometry_msgs::PoseStamped temp_pose;
-          temp_pose.header.stamp = ros::Time::now();
-          temp_pose.header.frame_id = map_frame_;
-          temp_pose.pose.position.x =
-            new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.translation.x;
-          temp_pose.pose.position.y =
-            new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.translation.y;
-          temp_pose.pose.position.z =
-            new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.translation.z;
-          temp_pose.pose.orientation.x =
-            new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.rotation.x;
-          temp_pose.pose.orientation.y =
-            new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.rotation.y;
-          temp_pose.pose.orientation.z =
-            new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.rotation.z;
-          temp_pose.pose.orientation.w =
-            new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.rotation.w;
-          new_obj.poses_puber[0].publish(temp_pose);
-          new_obj.fov_pc_puber[0].publish(new_obj.fov_clouds[0]);
+          if (pub_det_data_) {
+            new_obj.poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>(
+              ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class +
+               "_pose1"),
+              1, true));
+            new_obj.fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>(
+              ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class +
+               "_fov_pc1"),
+              1, true));
 
-          new_obj.obj_position_pub = nh_.advertise<geometry_msgs::PointStamped>(
-            ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class +
-             "_pos"),
-            1, true);
-          new_obj.cloud_pub = nh_.advertise<sensor_msgs::PointCloud2>(
-            ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class), 1,
-            true);
-          new_obj.raw_cloud_pub = nh_.advertise<sensor_msgs::PointCloud2>(
-            ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class +
-             "_raw"),
-            1, true);
-
-          ROS_DEBUG_STREAM("PUBLISHING NEW OBJ");
-          ROS_DEBUG_STREAM(new_obj.cloud.header);
-          new_obj.obj_position_pub.publish(new_obj.position);
-          new_obj.cloud_pub.publish(new_obj.cloud);
-          new_obj.raw_cloud_pub.publish(new_obj.cloud);
+            geometry_msgs::PoseStamped temp_pose;
+            temp_pose.header.stamp = ros::Time::now();
+            temp_pose.header.frame_id = map_frame_;
+            temp_pose.pose.position.x =
+              new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.translation.x;
+            temp_pose.pose.position.y =
+              new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.translation.y;
+            temp_pose.pose.position.z =
+              new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.translation.z;
+            temp_pose.pose.orientation.x =
+              new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.rotation.x;
+            temp_pose.pose.orientation.y =
+              new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.rotation.y;
+            temp_pose.pose.orientation.z =
+              new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.rotation.z;
+            temp_pose.pose.orientation.w =
+              new_obj.inv_camera_tfs[new_obj.inv_camera_tfs.size() - 1].transform.rotation.w;
+            new_obj.poses_puber[0].publish(temp_pose);
+            new_obj.fov_pc_puber[0].publish(new_obj.fov_clouds[0]);
+          }
         }
         object_detections_.push_back(new_obj);
 
@@ -609,20 +614,13 @@ void ObjectPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
       new_detection.robot_tf = current_robot_tf_;
       new_detection.inv_camera_tf = current_inv_cam_tf_;
       new_detection.inv_robot_tf = current_inv_rob_tf_;
-      ROS_DEBUG_STREAM("BOX: " << box);
       new_detection.bbox = box;
-      ROS_DEBUG_STREAM("UOBJ BOX: " << new_detection.bbox);
 
       // check if the object class has any spaces and replace with underscore
       std::replace(new_detection.object_class.begin(), new_detection.object_class.end(), ' ', '_');
 
       tf2::doTransform(temp_pt, new_detection.position.point, current_inv_cam_tf_);
 
-      if (debug_viz_) {
-        ROS_DEBUG_STREAM("PUBING UOBJ");
-        ROS_DEBUG_STREAM(new_detection.cloud.header);
-        uobj_pub_.publish(new_detection.cloud);
-      }
       unassigned_detections_.push_back(new_detection);
     }
   }
@@ -802,77 +800,85 @@ void ObjectPoseEstimation::updateRegisteredObject(
 
   object_detections_[obj_index].bboxes.push_back(uobj.bbox);
   object_detections_[obj_index].camera_tfs.push_back(uobj.camera_tf);
-  object_detections_[obj_index].robot_tfs.push_back(uobj.robot_tf);
   object_detections_[obj_index].inv_camera_tfs.push_back(uobj.inv_camera_tf);
-  object_detections_[obj_index].inv_robot_tfs.push_back(uobj.inv_camera_tf);
 
-  // debugging
-  if (debug_viz_) {
-    object_detections_[obj_index].obj_position_pub.publish(object_detections_[obj_index].position);
-    object_detections_[obj_index].cloud_pub.publish(object_detections_[obj_index].cloud);
-    object_detections_[obj_index].raw_cloud_pub.publish(object_detections_[obj_index].raw_cloud);
+  object_detections_[obj_index].cloud_pub.publish(object_detections_[obj_index].cloud);
+  object_detections_[obj_index].raw_cloud_pub.publish(object_detections_[obj_index].raw_cloud);
+  object_detections_[obj_index].obj_position_pub.publish(object_detections_[obj_index].position);
 
-    object_detections_[obj_index].poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>(
-      ("obj" + std::to_string(obj_index + 1) + "_" + object_detections_[obj_index].object_class +
-       "_pose" + std::to_string(object_detections_[obj_index].camera_tfs.size())),
-      1, true));
-    object_detections_[obj_index].fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>(
-      ("obj" + std::to_string(obj_index + 1) + "_" + object_detections_[obj_index].object_class +
-       "_fov_pc" + std::to_string(object_detections_[obj_index].camera_tfs.size())),
-      1, true));
+  if (save_det_data_) {
+    object_detections_[obj_index].robot_tfs.push_back(uobj.robot_tf);
+    object_detections_[obj_index].inv_robot_tfs.push_back(uobj.inv_camera_tf);
 
     image_processing::Snapshot snapshot;
     if (snapshot_client_.call(snapshot)) {
-      if (snapshot.response.img_valid) {
-        object_detections_[obj_index].img_puber.push_back(nh_.advertise<sensor_msgs::Image>(
-          ("obj" + std::to_string(obj_index + 1) + "_" +
-           object_detections_[obj_index].object_class + "_img" +
-           std::to_string(object_detections_[obj_index].camera_tfs.size())),
-          1, true));
+      // if (snapshot.response.img_valid) {
+      //   object_detections_[obj_index].images.push_back(snapshot.response.img);
 
-        object_detections_[obj_index].images.push_back(snapshot.response.img);
-        object_detections_[obj_index]
-          .img_puber[object_detections_[obj_index].img_puber.size() - 1]
-          .publish(
-            object_detections_[obj_index].images[object_detections_[obj_index].images.size() - 1]);
-      }
+      //   if (pub_det_data_) {
+      //     object_detections_[obj_index].img_puber.push_back(nh_.advertise<sensor_msgs::Image>(
+      //       ("obj" + std::to_string(obj_index + 1) + "_" +
+      //        object_detections_[obj_index].object_class + "_img" +
+      //        std::to_string(object_detections_[obj_index].camera_tfs.size())),
+      //       1, true));
+
+      //     object_detections_[obj_index]
+      //       .img_puber[object_detections_[obj_index].img_puber.size() - 1]
+      //       .publish(object_detections_[obj_index]
+      //                  .images[object_detections_[obj_index].images.size() - 1]);
+      //   }
+      // }
 
       if (snapshot.response.cimg_valid) {
-        object_detections_[obj_index].cimg_puber.push_back(
-          nh_.advertise<sensor_msgs::CompressedImage>(
-            ("obj" + std::to_string(obj_index + 1) + "_" +
-             object_detections_[obj_index].object_class + "_cmpr_img" +
-             std::to_string(object_detections_[obj_index].camera_tfs.size())),
-            1, true));
-
         object_detections_[obj_index].cmpr_images.push_back(snapshot.response.cimg);
-        object_detections_[obj_index]
-          .cimg_puber[object_detections_[obj_index].cimg_puber.size() - 1]
-          .publish(object_detections_[obj_index]
-                     .cmpr_images[object_detections_[obj_index].cmpr_images.size() - 1]);
+
+        if (pub_det_data_) {
+          object_detections_[obj_index].cimg_puber.push_back(
+            nh_.advertise<sensor_msgs::CompressedImage>(
+              ("obj" + std::to_string(obj_index + 1) + "_" +
+               object_detections_[obj_index].object_class + "_cmpr_img" +
+               std::to_string(object_detections_[obj_index].camera_tfs.size())),
+              1, true));
+
+          object_detections_[obj_index]
+            .cimg_puber[object_detections_[obj_index].cimg_puber.size() - 1]
+            .publish(object_detections_[obj_index]
+                       .cmpr_images[object_detections_[obj_index].cmpr_images.size() - 1]);
+        }
       }
 
     } else {
       ROS_DEBUG("Image Snapshot failed to call");
     }
 
-    geometry_msgs::PoseStamped temp_pose;
-    temp_pose.header.stamp = ros::Time::now();
-    temp_pose.header.frame_id = map_frame_;
-    temp_pose.pose.position.x = current_inv_cam_tf_.transform.translation.x;
-    temp_pose.pose.position.y = current_inv_cam_tf_.transform.translation.y;
-    temp_pose.pose.position.z = current_inv_cam_tf_.transform.translation.z;
-    temp_pose.pose.orientation.x = current_inv_cam_tf_.transform.rotation.x;
-    temp_pose.pose.orientation.y = current_inv_cam_tf_.transform.rotation.y;
-    temp_pose.pose.orientation.z = current_inv_cam_tf_.transform.rotation.z;
-    temp_pose.pose.orientation.w = current_inv_cam_tf_.transform.rotation.w;
-    object_detections_[obj_index]
-      .poses_puber[object_detections_[obj_index].poses_puber.size() - 1]
-      .publish(temp_pose);
-    object_detections_[obj_index]
-      .fov_pc_puber[object_detections_[obj_index].fov_pc_puber.size() - 1]
-      .publish(object_detections_[obj_index]
-                 .fov_clouds[object_detections_[obj_index].fov_clouds.size() - 1]);
+    if (pub_det_data_) {
+      object_detections_[obj_index].poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>(
+        ("obj" + std::to_string(obj_index + 1) + "_" + object_detections_[obj_index].object_class +
+         "_pose" + std::to_string(object_detections_[obj_index].camera_tfs.size())),
+        1, true));
+      object_detections_[obj_index].fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>(
+        ("obj" + std::to_string(obj_index + 1) + "_" + object_detections_[obj_index].object_class +
+         "_fov_pc" + std::to_string(object_detections_[obj_index].camera_tfs.size())),
+        1, true));
+
+      geometry_msgs::PoseStamped temp_pose;
+      temp_pose.header.stamp = ros::Time::now();
+      temp_pose.header.frame_id = map_frame_;
+      temp_pose.pose.position.x = current_inv_cam_tf_.transform.translation.x;
+      temp_pose.pose.position.y = current_inv_cam_tf_.transform.translation.y;
+      temp_pose.pose.position.z = current_inv_cam_tf_.transform.translation.z;
+      temp_pose.pose.orientation.x = current_inv_cam_tf_.transform.rotation.x;
+      temp_pose.pose.orientation.y = current_inv_cam_tf_.transform.rotation.y;
+      temp_pose.pose.orientation.z = current_inv_cam_tf_.transform.rotation.z;
+      temp_pose.pose.orientation.w = current_inv_cam_tf_.transform.rotation.w;
+      object_detections_[obj_index]
+        .poses_puber[object_detections_[obj_index].poses_puber.size() - 1]
+        .publish(temp_pose);
+      object_detections_[obj_index]
+        .fov_pc_puber[object_detections_[obj_index].fov_pc_puber.size() - 1]
+        .publish(object_detections_[obj_index]
+                   .fov_clouds[object_detections_[obj_index].fov_clouds.size() - 1]);
+    }
   }
 
   auto t2 = debug_clock_.now();
@@ -887,59 +893,23 @@ void ObjectPoseEstimation::updateRegisteredObject(
 void ObjectPoseEstimation::publishDetectionArray()
 {
   // output
-  vision_msgs::Detection3DArray detected_objects;
-  detected_objects.header.stamp = ros::Time::now();
-  detected_objects.header.frame_id = map_frame_;
+  detection_msgs::DetectionArray detected_objects;
   detected_objects.detections.reserve(object_detections_.size());
 
   for (const ObjectPoseEstimation::ObjectDetection & obj : object_detections_) {
     // add to the output
-    vision_msgs::Detection3D object;
-    object.header.frame_id = obj.object_class + "-" + map_frame_;
+    detection_msgs::Detection detection;
+    detection.object_class = obj.object_class;
+    detection.object_id = obj.object_number;
 
-    object.header.stamp = ros::Time::now();
+    detection.pose.header.frame_id = map_frame_;
+    detection.pose.header.stamp = ros::Time::now();
+    detection.pose.pose.position = obj.position.point;
+    detection.pose.pose.orientation.w = 1;
+    detection.cloud = obj.cloud;
+    detection.cmpr_image = obj.cmpr_images.back();
 
-    vision_msgs::ObjectHypothesisWithPose hypothesis;
-    hypothesis.id = -1;
-    // We are only using object classes as strings so they do not have an associated integer ID
-    hypothesis.score = 1.0;
-
-    // This switch isn't working properly for some reason
-    // switch (obj.bboxes.size()) {
-    //   case 0:  hypothesis.score = 0.0;
-    //   case 1:  hypothesis.score = 0.3;
-    //   case 2:  hypothesis.score = 0.8;
-    //   default: hypothesis.score = 1.0;
-    //            ROS_ERROR_STREAM("BBOXES SIZE: " << obj.bboxes.size());
-    // }
-
-    hypothesis.pose.pose.position = obj.position.point;
-    hypothesis.pose.pose.orientation.x = 0;
-    hypothesis.pose.pose.orientation.y = 0;
-    hypothesis.pose.pose.orientation.z = 0;
-    hypothesis.pose.pose.orientation.w = 1;
-    // hypothesis.pose.covariance
-    object.results.push_back(hypothesis);
-
-    object.bbox.center.position = obj.position.point;
-    object.bbox.center.orientation.x = 0;
-    object.bbox.center.orientation.y = 0;
-    object.bbox.center.orientation.z = 0;
-    object.bbox.center.orientation.w = 1;
-
-    object.source_cloud = obj.cloud;
-
-    ObjectPoseEstimation::CloudPtr cloud(new ObjectPoseEstimation::Cloud);
-    pcl::fromROSMsg(obj.cloud, *cloud);
-    PointType min_pt, max_pt;
-    pcl::getMinMax3D(*cloud, min_pt, max_pt);
-
-    object.bbox.size.x = max_pt.x - min_pt.x;
-    object.bbox.size.y = max_pt.y - min_pt.y;
-    object.bbox.size.z = max_pt.z - min_pt.z;
-
-    ROS_DEBUG_STREAM("OBJ " << obj.object_number << " 3D BBOX SIZE" << object.bbox.size);
-    detected_objects.detections.push_back(object);
+    detected_objects.detections.push_back(detection);
   }
 
   // publish results
@@ -952,42 +922,17 @@ void ObjectPoseEstimation::publishDetectionArray()
 void ObjectPoseEstimation::publishDetection(const int obj_index)
 {
   // output
-  vision_msgs::Detection3D detection;
-  detection.header.stamp = ros::Time::now();
-  detection.header.frame_id = object_detections_[obj_index].object_class + "-" + map_frame_;
+  detection_msgs::Detection detection;
+  detection.object_class = object_detections_[obj_index].object_class;
+  detection.object_id = object_detections_[obj_index].object_number;
 
   // add to the output
-  vision_msgs::ObjectHypothesisWithPose hypothesis;
-  hypothesis.id = object_detections_[obj_index].object_id;
-  hypothesis.score = 1.0;
-  hypothesis.pose.pose.position = object_detections_[obj_index].position.point;
-  hypothesis.pose.pose.orientation.x = 0;
-  hypothesis.pose.pose.orientation.y = 0;
-  hypothesis.pose.pose.orientation.z = 0;
-  hypothesis.pose.pose.orientation.w = 1;
-  // hypothesis.pose.covariance
-  detection.results.push_back(hypothesis);
-
-  detection.bbox.center.position = object_detections_[obj_index].position.point;
-  detection.bbox.center.orientation.x = 0;
-  detection.bbox.center.orientation.y = 0;
-  detection.bbox.center.orientation.z = 0;
-  detection.bbox.center.orientation.w = 1;
-
-  detection.source_cloud = object_detections_[obj_index].cloud;
-
-  ObjectPoseEstimation::CloudPtr cloud(new ObjectPoseEstimation::Cloud);
-  pcl::fromROSMsg(object_detections_[obj_index].cloud, *cloud);
-  PointType min_pt, max_pt;
-  pcl::getMinMax3D(*cloud, min_pt, max_pt);
-
-  detection.bbox.size.x = max_pt.x - min_pt.x;
-  detection.bbox.size.y = max_pt.y - min_pt.y;
-  detection.bbox.size.z = max_pt.z - min_pt.z;
-
-  ROS_DEBUG_STREAM(
-    "OBJ " << object_detections_[obj_index].object_number << " 3D BBOX SIZE"
-           << detection.bbox.size);
+  detection.pose.header.frame_id = map_frame_;
+  detection.pose.header.stamp = ros::Time::now();
+  detection.pose.pose.position = object_detections_[obj_index].position.point;
+  detection.pose.pose.orientation.w = 1;
+  detection.cloud = object_detections_[obj_index].cloud;
+  detection.cmpr_image = object_detections_[obj_index].cmpr_images.back();
 
   // publish results
   detection_pub_.publish(detection);
@@ -1009,6 +954,17 @@ void ObjectPoseEstimation::saveBag()
     bag.write(
       obj.object_class + std::to_string(obj.object_number) + "_position", now, obj.position);
 
+    for (int i = 0; i < obj.inv_camera_tfs.size(); ++i) {
+      bag.write(
+        obj.object_class + std::to_string(obj.object_number) + "_camera_tf" + std::to_string(i + 1),
+        now, obj.inv_camera_tfs[i]);
+    }
+
+    if (!save_det_data_) {
+      bag.close();
+      return;
+    }
+
     for (int i = 0; i < obj.fov_clouds.size(); ++i) {
       bag.write(
         obj.object_class + std::to_string(obj.object_number) + "_fov" + std::to_string(i + 1) +
@@ -1022,17 +978,11 @@ void ObjectPoseEstimation::saveBag()
         now, obj.robot_tfs[i]);
     }
 
-    for (int i = 0; i < obj.inv_camera_tfs.size(); ++i) {
-      bag.write(
-        obj.object_class + std::to_string(obj.object_number) + "_camera_tf" + std::to_string(i + 1),
-        now, obj.inv_camera_tfs[i]);
-    }
-
-    for (int i = 0; i < obj.images.size(); ++i) {
-      bag.write(
-        obj.object_class + std::to_string(obj.object_number) + "_image" + std::to_string(i + 1),
-        now, obj.images[i]);
-    }
+    // for (int i = 0; i < obj.images.size(); ++i) {
+    //   bag.write(
+    //     obj.object_class + std::to_string(obj.object_number) + "_image" + std::to_string(i + 1),
+    //     now, obj.images[i]);
+    // }
 
     for (int i = 0; i < obj.cmpr_images.size(); ++i) {
       bag.write(
@@ -1042,6 +992,7 @@ void ObjectPoseEstimation::saveBag()
     }
   }
   bag.close();
+  return;
 }
 
 /**
