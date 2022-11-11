@@ -182,7 +182,7 @@ private:
   ros::Subscriber bbox_sub_, cloud_sub_, camera_info_sub_;
 
   // Service
-  ros::ServiceServer save_server_;
+  ros::ServiceServer save_server_, pub_data_server_;
   ros::ServiceClient snapshot_client_;
 
   // Initialize transform listener
@@ -324,7 +324,12 @@ private:
   /**
    * @brief Offers a ros service client to trigger a rosbag save of the object detections data
    */
-  bool saveBagClient(std_srvs::Empty::Request & req, std_srvs::Empty::Response & res);
+  bool saveBagCb(std_srvs::Empty::Request & req, std_srvs::Empty::Response & res);
+
+  /**
+   * @brief Offers a ros service client to trigger a republish of the latest detection data
+   */
+  bool pubDataCb(std_srvs::Empty::Request & req, std_srvs::Empty::Response & res);
 };
 
 }  // namespace object_detection

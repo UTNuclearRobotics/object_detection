@@ -2,17 +2,17 @@
 # robot_frame: "jackal/base_link"
 # map_frame: "jackal/static_map"
 debug_viz: true
-robot_movement_threshold: 0.3
-confidence_threshold: 0.65
-distance_between_objects: 10.0
-new_tgt_dist_limit: 10.0
-bbox_pixel_padding: -50
+robot_movement_threshold: 1.0
+confidence_threshold: 0.97
+distance_between_objects: 3.0
+new_tgt_dist_limit: 5.0
+bbox_pixel_padding: -10
 bbox_edge: false
 bbox_edge_x: 0.01
 bbox_edge_y: 0.01
-robot_turning_threshold: 0.005
-sleep_period: 0.0
-pointcloud_stale_time: 0.01
+robot_turning_threshold: 0.00000005
+sleep_period: 0.1
+pointcloud_stale_time: 1.0
 save_bag_on_shutdown: true
 object_classes: ["barrel", "suitcase", "truck"]
 

@@ -40,7 +40,9 @@ ObjectPoseEstimation::ObjectPoseEstimation() : nh_(""), private_nh_("~")
   detection_pub_ = private_nh_.advertise<detection_msgs::Detection>("detection", 1);
 
   save_server_ =
-    private_nh_.advertiseService("save_bag", &ObjectPoseEstimation::saveBagClient, this);
+    private_nh_.advertiseService("save_bag", &ObjectPoseEstimation::saveBagCb, this);
+  pub_data_server_ =
+    private_nh_.advertiseService("publish_data", &ObjectPoseEstimation::pubDataCb, this);
 
   private_nh_.param<bool>("save_all_detection_data", save_det_data_, true);
   private_nh_.param<bool>("publish_all_detection_data", pub_det_data_, false);
@@ -995,10 +997,31 @@ void ObjectPoseEstimation::saveBag()
   return;
 }
 
+
 /**
-   * @brief Offers a ros service client to trigger a rosbag save of the object detections data
+   * @brief Offers a ros service callback to trigger a republish of latest detection data
    */
-bool ObjectPoseEstimation::saveBagClient(
+bool ObjectPoseEstimation::pubDataCb(
+  std_srvs::Empty::Request & req, std_srvs::Empty::Response & res)
+{
+  if (object_detections_.empty()) {
+    return false;
+  }
+  
+  for (int i = 0; i < object_detections_.size(); i++) {
+    publishDetection(i);
+  }
+
+  publishDetectionArray();
+
+  return true;
+}
+
+
+/**
+   * @brief Offers a ros service callback to trigger a rosbag save of the object detections data
+   */
+bool ObjectPoseEstimation::saveBagCb(
   std_srvs::Empty::Request & req, std_srvs::Empty::Response & res)
 {
   if (object_detections_.empty()) {
