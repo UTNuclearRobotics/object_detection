@@ -2,19 +2,36 @@
 <launch>
 
   <arg name="robot" default="walrus"/>
-  <arg name="enable_yolo" default="false"/>
+  <arg name="enable_darknet" default="false"/>
+  <arg name="enable_retinanet" default="false"/>
+  <arg name="camera_name" default="realsense_front"/>
+  <arg name="camera_image_name" default="color"/>
 
   <include file="$(find object_detection)/launch/pose_estimation.launch">
     <arg name="robot" value="$(arg robot)" />
+    <arg name="camera_name" value="$(arg camera_name)" />
+    <arg name="camera_image_name" value="$(arg camera_image_name)" />
   </include>
 
   <include file="$(find augre_detections)/launch/augre_detections.launch">
     <arg name="robot" value="$(arg robot)" />
   </include>
 
-  <group if="$(arg enable_yolo)">
+  <group if="$(arg enable_darknet)">
     <include file="$(find object_detection)/launch/darknet_detection.launch">
       <arg name="robot" value="$(arg robot)" />
+      <arg name="camera_name" value="$(arg camera_name)" />
+      <arg name="camera_image_name" value="$(arg camera_image_name)" />
     </include>
+  </group>
+
+  <group unless="$(arg enable_darknet)">
+    <group if="$(arg enable_retinanet)">
+      <include file="$(find object_detection)/launch/retinanet_detection.launch">
+        <arg name="robot" value="$(arg robot)" />
+        <arg name="camera_name" value="$(arg camera_name)" />
+        <arg name="camera_image_name" value="$(arg camera_image_name)" />
+      </include>
+    </group>
   </group>
 </launch>
