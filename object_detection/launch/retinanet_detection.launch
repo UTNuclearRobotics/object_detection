@@ -5,20 +5,18 @@
   <arg name="camera_name" default="realsense_front"/>
   <arg name="camera_image_name" default="color"/>
 
-  <group ns="$(arg robot)">
-    <!-- ###########################  Retinanet ############################# -->
-    <node pkg="retinanet_ros" type="test.py" name="barrel_detection" output="screen">
-      <remap from="retina_ros/bounding_boxes" to="darknet_ros/bounding_boxes"/>
-      <remap from="detected_image" to="darknet_ros/detection_image"/>
-    </node>
+  <!-- ###########################  Retinanet ############################# -->
+  <node pkg="retinanet_ros" type="test.py" name="barrel_detection" output="screen">
+    <remap from="retina_ros/bounding_boxes" to="darknet_ros/bounding_boxes"/>
+    <remap from="detected_image" to="darknet_ros/detection_image"/>
+  </node>
 
-    <!-- ###########################  Image Snapshot ########################## -->
-    <node pkg="image_processing" type="image_snapshot" name="image_snapshot" output="screen">
-      <param name="stale_time" value="1.0"/>
-      <!-- <remap from="image" to="$(arg camera)/color/image_raw"/> -->
-      <remap from="image" to="darknet_ros/detection_image"/>
-      <remap from="image/compressed" to="$(arg camera_name)/$(arg camera_image_name)/image_raw/compressed"/>
-      <remap from="camera_info" to="$(arg camera_name)/$(arg camera_image_name)/camera_info"/>
-    </node>
-  </group>
+  <!-- ###########################  Image Snapshot ########################## -->
+  <node pkg="image_processing" type="image_snapshot" name="image_snapshot" output="screen">
+    <param name="stale_time" value="1.0"/>
+    <!-- <remap from="image" to="$(arg camera)/color/image_raw"/> -->
+    <remap from="image" to="darknet_ros/detection_image"/>
+    <remap from="image/compressed" to="$(arg camera_name)/$(arg camera_image_name)/image_raw/compressed"/>
+    <remap from="camera_info" to="$(arg camera_name)/$(arg camera_image_name)/camera_info"/>
+  </node>
 </launch>
