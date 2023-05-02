@@ -39,8 +39,7 @@ ObjectPoseEstimation::ObjectPoseEstimation() : nh_(""), private_nh_("~")
     private_nh_.advertise<detection_msgs::DetectionArray>("detected_objects", 1);
   detection_pub_ = private_nh_.advertise<detection_msgs::Detection>("detection", 1);
 
-  save_server_ =
-    private_nh_.advertiseService("save_bag", &ObjectPoseEstimation::saveBagCb, this);
+  save_server_ = private_nh_.advertiseService("save_bag", &ObjectPoseEstimation::saveBagCb, this);
   pub_data_server_ =
     private_nh_.advertiseService("publish_data", &ObjectPoseEstimation::pubDataCb, this);
 
@@ -51,12 +50,6 @@ ObjectPoseEstimation::ObjectPoseEstimation() : nh_(""), private_nh_("~")
   private_nh_.param<std::string>(
     "camera_optical_frame", camera_optical_frame_, "camera_optical_link");
 
-  ROS_DEBUG_STREAM("DEBUG PARAM: " << save_det_data_);
-  ROS_DEBUG_STREAM("DEBUG PARAM: " << pub_det_data_);
-  ROS_DEBUG_STREAM("MAP FRAME PARAM: " << map_frame_);
-  ROS_DEBUG_STREAM("ROBOT FRAME PARAM: " << robot_frame_);
-  ROS_DEBUG_STREAM("CAMERA OPT FRAME PARAM: " << camera_optical_frame_);
-
   snapshot_client_ = nh_.serviceClient<image_processing::Snapshot>("image_snapshot/send_snapshot");
 }
 
@@ -66,7 +59,7 @@ ObjectPoseEstimation::~ObjectPoseEstimation()
   bool save;
   private_nh_.param<bool>("save_bag_on_shutdown", save, false);
   if (save) {
-    ROS_INFO("SAVING OBJ BAG");
+    ROS_INFO("Saving object detections bag");
     saveBag();
   }
 }
@@ -76,7 +69,6 @@ ObjectPoseEstimation::~ObjectPoseEstimation()
    */
 void ObjectPoseEstimation::initiateDetections()
 {
-  ROS_DEBUG("INITIATE DETS");
   double robot_movement_threshold, robot_turning_threshold, sleeper, dist_bet_objs,
     new_obj_dist_limit;
   private_nh_.param<double>("robot_movement_threshold", robot_movement_threshold, 2.0);
@@ -137,7 +129,6 @@ void ObjectPoseEstimation::initiateDetections()
 
     // robot has now moved beyond threshold. check for objects. break when we have unassigned object detections
     while (ros::ok() && unassigned_detections_.size() == 0) {
-      auto t1 = debug_clock_.now();
       prev_robot_tf_ = current_robot_tf_;
 
       ros::Duration(sleeper).sleep();
@@ -154,18 +145,12 @@ void ObjectPoseEstimation::initiateDetections()
         continue;
       }
       ros::spinOnce();
-      auto t2 = debug_clock_.now();
-      // ROS_DEBUG_STREAM("TIME SPIN: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2- t1).count());
     }
-
-    ROS_DEBUG("SHOULD HAVE UNASSIGNED OBJECTS NOW");
 
     // once we have unassigned object detections need to process object comparisons
     if (object_detections_.size() > 0) {
-      ROS_DEBUG("CHECKING EXISTING OBJS");
       auto uobj = unassigned_detections_.begin();
 
-      auto t1 = debug_clock_.now();
       while (uobj != unassigned_detections_.end()) {
         // if the unassigned detection is associated with a known object then must add the data and update new existing object info
         if (const int obj_id = isRegisteredObject(uobj->object_class, uobj->cloud)) {
@@ -193,25 +178,16 @@ void ObjectPoseEstimation::initiateDetections()
           ++uobj;
         }
       }
-      auto t2 = debug_clock_.now();
-      ROS_DEBUG_STREAM(
-        "TIME TO CHECK UOBJS: "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
     }
 
     // if we still have unassigned detections then we assign them as new objects
     if (unassigned_detections_.size() > 0) {
-      auto t1 = debug_clock_.now();
-
       for (const ObjectPoseEstimation::UnassignedDetection & uobj : unassigned_detections_) {
         // check to see if the uassigned object is past the distance limit from the robot to add in as a new object
         double dx, dy;
         dx = uobj.position.point.x - current_inv_rob_tf_.transform.translation.x;
         dy = uobj.position.point.y - current_inv_rob_tf_.transform.translation.y;
         if ((dx * dx + dy * dy) > (new_obj_dist_limit * new_obj_dist_limit)) {
-          ROS_DEBUG_STREAM(
-            "New obj discovered but it is outside the new object distance limit of: "
-            << new_obj_dist_limit << " dx: " << dx << " dy: " << dy);
           continue;
         }
 
@@ -237,8 +213,6 @@ void ObjectPoseEstimation::initiateDetections()
            "_raw"),
           1, true);
 
-        ROS_DEBUG_STREAM("PUBLISHING NEW OBJ");
-        ROS_DEBUG_STREAM(new_obj.cloud.header);
         new_obj.obj_position_pub.publish(new_obj.position);
         new_obj.cloud_pub.publish(new_obj.cloud);
         new_obj.raw_cloud_pub.publish(new_obj.cloud);
@@ -253,29 +227,16 @@ void ObjectPoseEstimation::initiateDetections()
 
           image_processing::Snapshot snapshot;
           if (snapshot_client_.call(snapshot)) {
-            // if (snapshot.response.img_valid) {
-            //   new_obj.images.push_back(snapshot.response.img);
-
-            //   if (pub_det_data_) {
-            //     new_obj.img_puber.push_back(nh_.advertise<sensor_msgs::Image>(
-            //       ("obj" + std::to_string(object_detections_.size() + 1) + "_" +
-            //        new_obj.object_class + "_img1"),
-            //       1, true));
-
-            //     new_obj.img_puber[0].publish(new_obj.images[0]);
-            //   }
-            // }
-
-            if (snapshot.response.cimg_valid) {
-              new_obj.cmpr_images.push_back(snapshot.response.cimg);
+            if (snapshot.response.img_valid) {
+              // save image to file
 
               if (pub_det_data_) {
-                new_obj.cimg_puber.push_back(nh_.advertise<sensor_msgs::CompressedImage>(
+                new_obj.url_puber.push_back(nh_.advertise<std_msgs::String>(
                   ("obj" + std::to_string(object_detections_.size() + 1) + "_" +
-                   new_obj.object_class + "_cmpr_img1"),
+                   new_obj.object_class + "_img_url"),
                   1, true));
 
-                new_obj.cimg_puber[0].publish(new_obj.cmpr_images[0]);
+                new_obj.url_puber[0].publish(new_obj.img_urls[0]);
               }
             }
           } else {
@@ -321,10 +282,6 @@ void ObjectPoseEstimation::initiateDetections()
       }
 
       unassigned_detections_.clear();
-      auto t2 = debug_clock_.now();
-      ROS_DEBUG_STREAM(
-        "TIME ASSIGN NEW OBJS: "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
     }
   }
 }
@@ -409,7 +366,6 @@ bool ObjectPoseEstimation::robotIsTurning(const double robot_turning_threshold)
     ROS_DEBUG_STREAM("ROBOT TURNING: " << angle);
     return true;
   } else {
-    // ROS_DEBUG_STREAM("ROBOT NOT TURNING: " << angle);
     return false;
   }
 }
@@ -427,17 +383,10 @@ inline ObjectPoseEstimation::PixelCoords ObjectPoseEstimation::poseToPixel(
   const ObjectPoseEstimation::PointType & point, const sensor_msgs::CameraInfo & camera_info)
 {
   ObjectPoseEstimation::PixelCoords result;
-  auto t1 = debug_clock_.now();
 
   result.x = camera_info.K[0] * point.x / point.z + camera_info.K[2];
   result.y = camera_info.K[4] * point.y / point.z + camera_info.K[5];
   result.z = point.z;
-  auto t2 = debug_clock_.now();
-  if (std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() > 1) {
-    ROS_DEBUG_STREAM(
-      "TIME POSE TO PIXEL: "
-      << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
-  }
   return result;
 }
 
@@ -452,19 +401,11 @@ inline ObjectPoseEstimation::PixelCoords ObjectPoseEstimation::poseToPixel(
 std::vector<ObjectPoseEstimation::PixelCoords> ObjectPoseEstimation::convertCloudToPixelCoords(
   const ObjectPoseEstimation::CloudPtr cloud, const sensor_msgs::CameraInfo & camera_info)
 {
-  auto t1 = debug_clock_.now();
   std::vector<ObjectPoseEstimation::PixelCoords> output;
   output.reserve(cloud->size());
 
   for (const ObjectPoseEstimation::PointType & point : cloud->points) {
     output.push_back(poseToPixel(point, camera_info));
-  }
-  auto t2 = debug_clock_.now();
-  // std::chrono::duration_cast<std::chrono::milliseconds> tme = t2 - t1;
-  if (std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() > 1) {
-    ROS_DEBUG_STREAM(
-      "TIME CONVERT CLOUD TO PIXELS: "
-      << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
   }
   return output;
 }
@@ -485,7 +426,6 @@ ObjectPoseEstimation::CloudPtr ObjectPoseEstimation::filterPointsInBox(
   const std::vector<ObjectPoseEstimation::PixelCoords> & pixel_coordinates, const int xmin,
   const int xmax, const int ymin, const int ymax)
 {
-  auto t1 = debug_clock_.now();
   pcl::PointIndices::Ptr indices_in_bbox(new pcl::PointIndices());
   indices_in_bbox->indices.reserve(input->size());
 
@@ -508,12 +448,6 @@ ObjectPoseEstimation::CloudPtr ObjectPoseEstimation::filterPointsInBox(
   bbox_filter.setNegative(false);
   bbox_filter.filter(*cloud_in_bbox);
 
-  auto t2 = debug_clock_.now();
-  if (std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() > 1) {
-    ROS_DEBUG_STREAM(
-      "TIME FILTER POINTS IN BOX: "
-      << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
-  }
   return cloud_in_bbox;
 }
 
@@ -524,10 +458,7 @@ ObjectPoseEstimation::CloudPtr ObjectPoseEstimation::filterPointsInBox(
    */
 void ObjectPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
 {
-  ROS_DEBUG("POINTCLOUD CB");
-  auto t1 = debug_clock_.now();
   if (lidar_frame_.empty()) {
-    ROS_DEBUG("LIDAR FRAME INIT");
     lidar_frame_ = input_cloud.header.frame_id;
     return;
   }
@@ -626,9 +557,6 @@ void ObjectPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
       unassigned_detections_.push_back(new_detection);
     }
   }
-  auto t2 = debug_clock_.now();
-  ROS_DEBUG_STREAM(
-    "TIME PCL2 CB: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
 }
 
 /**
@@ -640,25 +568,15 @@ void ObjectPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
 int ObjectPoseEstimation::isRegisteredObject(
   const std::string object_class, sensor_msgs::PointCloud2 cloud_in)
 {
-  auto t1 = debug_clock_.now();
-
   for (const ObjectPoseEstimation::ObjectDetection & obj : object_detections_) {
     if (object_class != obj.object_class) {
-      ROS_DEBUG_STREAM("UOBJ Does not match object class from OBJ " << obj.object_number);
-      ROS_DEBUG_STREAM("UOBJ Class: " << object_class << " OBJ Class: " << obj.object_class);
       continue;
     }
 
     bool obj_match{true};
     for (int i = 0; i < obj.camera_tfs.size(); ++i) {
-      ROS_DEBUG("COMPARING LIDARS");
-      ROS_DEBUG_STREAM(obj.camera_tfs[i]);
       sensor_msgs::PointCloud2 temp_cloud;
       tf2::doTransform(cloud_in, temp_cloud, obj.camera_tfs[i]);
-
-      ROS_DEBUG_STREAM(
-        "BBOX " << obj.bboxes[i].xmin << " " << obj.bboxes[i].xmax << " " << obj.bboxes[i].ymin
-                << " " << obj.bboxes[i].ymax);
 
       // Convert sensor_msgs::PointCloud2 to pcl::PointCloud
       ObjectPoseEstimation::CloudPtr cloud(new ObjectPoseEstimation::Cloud);
@@ -673,27 +591,15 @@ int ObjectPoseEstimation::isRegisteredObject(
 
       // if there's no overlapping points in the object bounding box then we know it isn't associated with this object
       if (cloud_in_bbox->empty()) {
-        ROS_DEBUG("OBJ NOT MATCHED");
-        ROS_DEBUG_STREAM("CLOUD IN BOX EMPTY FOR VIEW: " << (i + 1));
         obj_match = false;
         break;
       }
     }
     // if we made it through the last loop without breaking then it is a obj match and return the associated object
     if (obj_match) {
-      ROS_DEBUG_STREAM("OBJ MATCHED TO: " << obj.object_number);
-      auto t2 = debug_clock_.now();
-      ROS_DEBUG_STREAM(
-        "TIME IS REGISTERED OBJ: "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
-
       return obj.object_number;
     }
   }
-  auto t2 = debug_clock_.now();
-  ROS_DEBUG_STREAM(
-    "TIME IS REGISTERED OBJ: "
-    << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
   return 0;
 }
 
@@ -707,10 +613,6 @@ int ObjectPoseEstimation::isRegisteredObject(
 int ObjectPoseEstimation::isCloseToObject(
   const std::string object_class, const geometry_msgs::PointStamped pos_in, const double dist)
 {
-  auto t1 = debug_clock_.now();
-
-  ROS_DEBUG("COMPARING OBJ CLOSNESS");
-
   for (const ObjectPoseEstimation::ObjectDetection & obj : object_detections_) {
     if (object_class != obj.object_class) {
       continue;
@@ -720,18 +622,10 @@ int ObjectPoseEstimation::isCloseToObject(
       (obj.position.point.x - pos_in.point.x) * (obj.position.point.x - pos_in.point.x) +
         (obj.position.point.y - pos_in.point.y) * (obj.position.point.y - pos_in.point.y) <
       (dist * dist)) {
-      auto t2 = debug_clock_.now();
-      ROS_DEBUG_STREAM(
-        "TIME IS CLOSE OBJ: "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
       return obj.object_number;
     }
   }
 
-  auto t2 = debug_clock_.now();
-  ROS_DEBUG_STREAM(
-    "TIME IS CLOSE OBJ: "
-    << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
   return 0;
 }
 
@@ -743,8 +637,6 @@ int ObjectPoseEstimation::isCloseToObject(
 void ObjectPoseEstimation::updateRegisteredObject(
   ObjectPoseEstimation::UnassignedDetection uobj, const int obj_index)
 {
-  auto t1 = debug_clock_.now();
-
   // Before we start messing with the uobj cloud let's save the raw data into the obj detections
   object_detections_[obj_index].fov_clouds.push_back(uobj.cloud);
   pcl::concatenatePointCloud(
@@ -814,38 +706,33 @@ void ObjectPoseEstimation::updateRegisteredObject(
 
     image_processing::Snapshot snapshot;
     if (snapshot_client_.call(snapshot)) {
-      // if (snapshot.response.img_valid) {
-      //   object_detections_[obj_index].images.push_back(snapshot.response.img);
+      // img url stuff
+      if (snapshot.response.img_valid) {
+        cv_bridge::CvImagePtr cv_ptr;
 
-      //   if (pub_det_data_) {
-      //     object_detections_[obj_index].img_puber.push_back(nh_.advertise<sensor_msgs::Image>(
-      //       ("obj" + std::to_string(obj_index + 1) + "_" +
-      //        object_detections_[obj_index].object_class + "_img" +
-      //        std::to_string(object_detections_[obj_index].camera_tfs.size())),
-      //       1, true));
+        std_msgs::String url;
 
-      //     object_detections_[obj_index]
-      //       .img_puber[object_detections_[obj_index].img_puber.size() - 1]
-      //       .publish(object_detections_[obj_index]
-      //                  .images[object_detections_[obj_index].images.size() - 1]);
-      //   }
-      // }
+        try {
+          cv_ptr = cv_bridge::toCvCopy(snapshot.response.img, sensor_msgs::image_encodings::BGR8);
+          cv::imwrite("/home/OBJECT_DETECTION.jpg", cv_ptr->image);
+          url.data = "http://192.168.11.131:4002/home/OBJECT_DETECTION.jpg";
 
-      if (snapshot.response.cimg_valid) {
-        object_detections_[obj_index].cmpr_images.push_back(snapshot.response.cimg);
+          object_detections_[obj_index].img_urls.push_back(url);
 
-        if (pub_det_data_) {
-          object_detections_[obj_index].cimg_puber.push_back(
-            nh_.advertise<sensor_msgs::CompressedImage>(
+          if (pub_det_data_) {
+            object_detections_[obj_index].url_puber.push_back(nh_.advertise<std_msgs::String>(
               ("obj" + std::to_string(obj_index + 1) + "_" +
-               object_detections_[obj_index].object_class + "_cmpr_img" +
+               object_detections_[obj_index].object_class + "_img_url" +
                std::to_string(object_detections_[obj_index].camera_tfs.size())),
               1, true));
 
-          object_detections_[obj_index]
-            .cimg_puber[object_detections_[obj_index].cimg_puber.size() - 1]
-            .publish(object_detections_[obj_index]
-                       .cmpr_images[object_detections_[obj_index].cmpr_images.size() - 1]);
+            object_detections_[obj_index]
+              .url_puber[object_detections_[obj_index].url_puber.size() - 1]
+              .publish(object_detections_[obj_index]
+                         .img_urls[object_detections_[obj_index].img_urls.size() - 1]);
+          }
+        } catch (cv_bridge::Exception & e) {
+          ROS_ERROR("Could not save image to file. No detection image url will be sent.");
         }
       }
 
@@ -882,11 +769,6 @@ void ObjectPoseEstimation::updateRegisteredObject(
                    .fov_clouds[object_detections_[obj_index].fov_clouds.size() - 1]);
     }
   }
-
-  auto t2 = debug_clock_.now();
-  ROS_DEBUG_STREAM(
-    "TIME UPDATE OBJ PC: "
-    << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
 }
 
 /**
@@ -909,7 +791,7 @@ void ObjectPoseEstimation::publishDetectionArray()
     detection.pose.pose.position = obj.position.point;
     detection.pose.pose.orientation.w = 1;
     detection.cloud = obj.cloud;
-    detection.cmpr_image = obj.cmpr_images.back();
+    detection.url = obj.img_urls.back().data;
 
     detected_objects.detections.push_back(detection);
   }
@@ -934,7 +816,7 @@ void ObjectPoseEstimation::publishDetection(const int obj_index)
   detection.pose.pose.position = object_detections_[obj_index].position.point;
   detection.pose.pose.orientation.w = 1;
   detection.cloud = object_detections_[obj_index].cloud;
-  detection.cmpr_image = object_detections_[obj_index].cmpr_images.back();
+  detection.url = object_detections_[obj_index].img_urls.back().data;
 
   // publish results
   detection_pub_.publish(detection);
@@ -980,23 +862,15 @@ void ObjectPoseEstimation::saveBag()
         now, obj.robot_tfs[i]);
     }
 
-    // for (int i = 0; i < obj.images.size(); ++i) {
-    //   bag.write(
-    //     obj.object_class + std::to_string(obj.object_number) + "_image" + std::to_string(i + 1),
-    //     now, obj.images[i]);
-    // }
-
-    for (int i = 0; i < obj.cmpr_images.size(); ++i) {
+    for (int i = 0; i < obj.img_urls.size(); ++i) {
       bag.write(
-        obj.object_class + std::to_string(obj.object_number) + "_cmpr_image" +
-          std::to_string(i + 1),
-        now, obj.cmpr_images[i]);
+        obj.object_class + std::to_string(obj.object_number) + "_img_urls" + std::to_string(i + 1),
+        now, obj.img_urls[i]);
     }
   }
   bag.close();
   return;
 }
-
 
 /**
    * @brief Offers a ros service callback to trigger a republish of latest detection data
@@ -1007,7 +881,7 @@ bool ObjectPoseEstimation::pubDataCb(
   if (object_detections_.empty()) {
     return false;
   }
-  
+
   for (int i = 0; i < object_detections_.size(); i++) {
     publishDetection(i);
   }
@@ -1016,7 +890,6 @@ bool ObjectPoseEstimation::pubDataCb(
 
   return true;
 }
-
 
 /**
    * @brief Offers a ros service callback to trigger a rosbag save of the object detections data

@@ -10,5 +10,9 @@ geometry_msgs/PoseStamped pose
 # Point cloud of object detected
 sensor_msgs/PointCloud2 cloud
 
+# Url pointing to file of the detection image
+string url
+
+# DEPRECATED (use a url pointing to the saved image file)
 # Compressed image of detected object
 sensor_msgs/CompressedImage cmpr_image

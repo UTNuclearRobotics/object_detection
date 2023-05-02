@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include <cv_bridge/cv_bridge.h>
 #include <detection_msgs/DetectionArray.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -37,6 +38,7 @@
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/CompressedImage.h>
 #include <sensor_msgs/Image.h>
+#include <std_msgs/String.h>
 #include <std_srvs/Empty.h>
 #include <tf2/convert.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -44,7 +46,9 @@
 #include <tf2_sensor_msgs/tf2_sensor_msgs.h>
 #include <vision_msgs/Detection3DArray.h>
 
-#include <chrono>
+#include <opencv2/opencv.hpp>
+
+// #include <chrono>
 
 // Darknet detection
 #include <darknet_ros_msgs/BoundingBoxes.h>
@@ -153,13 +157,15 @@ private:
     std::vector<sensor_msgs::PointCloud2>
       fov_clouds;  // these clouds must be saved in the map frame
     // std::vector<sensor_msgs::Image> images;
-    std::vector<sensor_msgs::CompressedImage> cmpr_images;
+    // std::vector<sensor_msgs::CompressedImage> cmpr_images;
+    std::vector<std_msgs::String> img_urls;
 
     // The data below is only stored when publish_all_detection_data is true
     std::vector<ros::Publisher> poses_puber;
     std::vector<ros::Publisher> fov_pc_puber;
     // std::vector<ros::Publisher> img_puber;
-    std::vector<ros::Publisher> cimg_puber;
+    // std::vector<ros::Publisher> cimg_puber;
+    std::vector<ros::Publisher> url_puber;
   } ObjectDetection;
 
   // class variables
@@ -198,7 +204,7 @@ private:
   std::vector<ObjectPoseEstimation::ObjectDetection> object_detections_;
 
   // debug timers
-  std::chrono::high_resolution_clock debug_clock_;
+  // std::chrono::high_resolution_clock debug_clock_;
 
   /**
    * @brief Callback function for bounding boxes detected by Darknet

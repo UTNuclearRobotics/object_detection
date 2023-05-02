@@ -14,6 +14,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # # Find catkin macros and libraries
 # # if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 # # is used, also find other catkin packages
+find_package(OpenCV REQUIRED)
+
 find_package(catkin REQUIRED COMPONENTS
   pcl_conversions
   pcl_ros
@@ -27,6 +29,8 @@ find_package(catkin REQUIRED COMPONENTS
   image_transport
   image_processing
   detection_msgs
+  cv_bridge
+  std_msgs
 )
 
 # # System dependencies are found with CMake's conventions
@@ -51,6 +55,8 @@ catkin_package(
   image_transport
   image_processing
   detection_msgs
+  cv_bridge
+  std_msgs
 )
 
 # ##########
@@ -69,7 +75,7 @@ add_executable(object_pose_estimation src/object_pose_estimation.cpp)
 add_executable(image_buffer src/image_buffer.cpp)
 
 target_link_libraries(object_detection_streamer ${catkin_LIBRARIES})
-target_link_libraries(object_pose_estimation ${catkin_LIBRARIES})
+target_link_libraries(object_pose_estimation ${catkin_LIBRARIES} ${OpenCV_LIBS})
 target_link_libraries(image_buffer ${catkin_LIBRARIES})
 
 add_dependencies(object_pose_estimation ${${PROJECT_NAME}_exported_objects} ${catkin_EXPORTED_TARGETS})

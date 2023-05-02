@@ -27,6 +27,9 @@
   <depend>image_transport</depend>
   <depend>image_processing</depend>
   <depend>detection_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>std_msgs</depend>
+  <depend>OpenCV</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
