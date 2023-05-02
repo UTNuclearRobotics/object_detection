@@ -714,7 +714,7 @@ void ObjectPoseEstimation::updateRegisteredObject(
 
         try {
           cv_ptr = cv_bridge::toCvCopy(snapshot.response.img, sensor_msgs::image_encodings::BGR8);
-          cv::imwrite("/home/OBJECT_DETECTION.jpg", cv_ptr->image);
+          cv::imwrite("/home/detection_imgs/OBJECT_DETECTION.jpg", cv_ptr->image);
           url.data = "http://192.168.11.131:4002/home/OBJECT_DETECTION.jpg";
 
           object_detections_[obj_index].img_urls.push_back(url);
