@@ -51,6 +51,43 @@ ObjectPoseEstimation::ObjectPoseEstimation() : nh_(""), private_nh_("~")
     "camera_optical_frame", camera_optical_frame_, "camera_optical_link");
 
   snapshot_client_ = nh_.serviceClient<image_processing::Snapshot>("image_snapshot/send_snapshot");
+
+  // if save data enabled then let's estabish the folder path
+  if (save_det_data_) {
+    std::string data_folder_path;
+    data_folder_path = ros::package::getPath("afc_demos");
+
+    if (data_folder_path.empty()) {
+      data_folder_path = ros::package::getPath("object_detection");
+    }
+
+    if (data_folder_path.empty()) {
+      data_folder_path = ros::package::getPath("pointcloud_processing");
+    }
+
+    data_folder_path += "/detection_data/";
+
+    char date[100];
+    std::time_t t = std::time(0);
+    std::strftime(date, 100, "%Y-%m-%d_%H-%M-%S", std::localtime(&t));
+    std::string date_string(date);
+
+    data_folder_path += date_string;
+    std::filesystem::create_directories(data_folder_path);
+
+    bool enable_http_server;
+    std::string ip_address, ip_port;
+    private_nh_.param<bool>("enable_http_server", enable_http_server, true);
+
+    if (enable_http_server) {
+      private_nh_.param<std::string>("http_server_ip_address", ip_address, "localhost");
+      private_nh_.param<std::string>("http_server_ip_port", ip_port, "8000");
+
+      data_url_ = "http://" + ip_address + ":" + ip_port + data_folder_path;
+    } else {
+      data_url_ = data_folder_path;
+    }
+  }
 }
 
 // destructor
@@ -201,17 +238,15 @@ void ObjectPoseEstimation::initiateDetections()
         new_obj.camera_tfs.push_back(current_camera_tf_);
         new_obj.inv_camera_tfs.push_back(current_inv_cam_tf_);
 
-        new_obj.obj_position_pub = nh_.advertise<geometry_msgs::PointStamped>(
-          ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class +
-           "_pos"),
-          1, true);
-        new_obj.cloud_pub = nh_.advertise<sensor_msgs::PointCloud2>(
-          ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class), 1,
-          true);
-        new_obj.raw_cloud_pub = nh_.advertise<sensor_msgs::PointCloud2>(
-          ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class +
-           "_raw"),
-          1, true);
+        std::string object_publisher_prefix{
+          "obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class};
+
+        new_obj.obj_position_pub =
+          nh_.advertise<geometry_msgs::PointStamped>((object_publisher_prefix + "_pos"), 1, true);
+        new_obj.cloud_pub =
+          nh_.advertise<sensor_msgs::PointCloud2>((object_publisher_prefix), 1, true);
+        new_obj.raw_cloud_pub =
+          nh_.advertise<sensor_msgs::PointCloud2>((object_publisher_prefix + "_raw"), 1, true);
 
         new_obj.obj_position_pub.publish(new_obj.position);
         new_obj.cloud_pub.publish(new_obj.cloud);
@@ -229,14 +264,27 @@ void ObjectPoseEstimation::initiateDetections()
           if (snapshot_client_.call(snapshot)) {
             if (snapshot.response.img_valid) {
               // save image to file
+              try {
+                std::string img_file_name{object_publisher_prefix + ".png"};
+                cv_bridge::CvImagePtr cv_ptr;
+                cv_ptr = cv_bridge::toCvCopy(snapshot.response.img, snapshot.response.img.encoding);
+                cv::imwrite(img_file_name, cv_ptr->image);
 
-              if (pub_det_data_) {
-                new_obj.url_puber.push_back(nh_.advertise<std_msgs::String>(
-                  ("obj" + std::to_string(object_detections_.size() + 1) + "_" +
-                   new_obj.object_class + "_img_url"),
-                  1, true));
+                std_msgs::String url;
+                url.data = data_url_ + img_file_name;
 
-                new_obj.url_puber[0].publish(new_obj.img_urls[0]);
+                new_obj.img_urls.push_back(url);
+
+                if (pub_det_data_) {
+                  new_obj.url_puber.push_back(nh_.advertise<std_msgs::String>(
+                    ("obj" + std::to_string(object_detections_.size() + 1) + "_" +
+                     new_obj.object_class + "_img_url"),
+                    1, true));
+
+                  new_obj.url_puber[0].publish(new_obj.img_urls[0]);
+                }
+              } catch (cv_bridge::Exception & e) {
+                ROS_ERROR("Could not save image to file. No detection image url will be sent.");
               }
             }
           } else {
@@ -245,13 +293,9 @@ void ObjectPoseEstimation::initiateDetections()
 
           if (pub_det_data_) {
             new_obj.poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>(
-              ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class +
-               "_pose1"),
-              1, true));
+              (object_publisher_prefix + "_pose1"), 1, true));
             new_obj.fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>(
-              ("obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class +
-               "_fov_pc1"),
-              1, true));
+              (object_publisher_prefix + "_fov_pc1"), 1, true));
 
             geometry_msgs::PoseStamped temp_pose;
             temp_pose.header.stamp = ros::Time::now();
@@ -701,6 +745,9 @@ void ObjectPoseEstimation::updateRegisteredObject(
   object_detections_[obj_index].obj_position_pub.publish(object_detections_[obj_index].position);
 
   if (save_det_data_) {
+    std::string object_publisher_prefix{
+      "obj" + std::to_string(obj_index + 1) + "_" + object_detections_[obj_index].object_class};
+
     object_detections_[obj_index].robot_tfs.push_back(uobj.robot_tf);
     object_detections_[obj_index].inv_robot_tfs.push_back(uobj.inv_camera_tf);
 
@@ -708,21 +755,20 @@ void ObjectPoseEstimation::updateRegisteredObject(
     if (snapshot_client_.call(snapshot)) {
       // img url stuff
       if (snapshot.response.img_valid) {
-        cv_bridge::CvImagePtr cv_ptr;
-
-        std_msgs::String url;
-
         try {
-          cv_ptr = cv_bridge::toCvCopy(snapshot.response.img, sensor_msgs::image_encodings::BGR8);
-          cv::imwrite("/home/detection_imgs/OBJECT_DETECTION.jpg", cv_ptr->image);
-          url.data = "http://192.168.11.131:4002/home/OBJECT_DETECTION.jpg";
+          std::string img_file_name{object_publisher_prefix + ".png"};
+          cv_bridge::CvImagePtr cv_ptr;
+          cv_ptr = cv_bridge::toCvCopy(snapshot.response.img, snapshot.response.img.encoding);
+          cv::imwrite(img_file_name, cv_ptr->image);
+
+          std_msgs::String url;
+          url.data = data_url_ + img_file_name;
 
           object_detections_[obj_index].img_urls.push_back(url);
 
           if (pub_det_data_) {
             object_detections_[obj_index].url_puber.push_back(nh_.advertise<std_msgs::String>(
-              ("obj" + std::to_string(obj_index + 1) + "_" +
-               object_detections_[obj_index].object_class + "_img_url" +
+              (object_publisher_prefix + "_img_url" +
                std::to_string(object_detections_[obj_index].camera_tfs.size())),
               1, true));
 
@@ -742,12 +788,12 @@ void ObjectPoseEstimation::updateRegisteredObject(
 
     if (pub_det_data_) {
       object_detections_[obj_index].poses_puber.push_back(nh_.advertise<geometry_msgs::PoseStamped>(
-        ("obj" + std::to_string(obj_index + 1) + "_" + object_detections_[obj_index].object_class +
-         "_pose" + std::to_string(object_detections_[obj_index].camera_tfs.size())),
+        (object_publisher_prefix + "_pose" +
+         std::to_string(object_detections_[obj_index].camera_tfs.size())),
         1, true));
       object_detections_[obj_index].fov_pc_puber.push_back(nh_.advertise<sensor_msgs::PointCloud2>(
-        ("obj" + std::to_string(obj_index + 1) + "_" + object_detections_[obj_index].object_class +
-         "_fov_pc" + std::to_string(object_detections_[obj_index].camera_tfs.size())),
+        (object_publisher_prefix + "_fov_pc" +
+         std::to_string(object_detections_[obj_index].camera_tfs.size())),
         1, true));
 
       geometry_msgs::PoseStamped temp_pose;

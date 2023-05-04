@@ -33,6 +33,7 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <image_processing/Snapshot.h>
+#include <ros/package.h>
 #include <ros/ros.h>
 #include <rosbag/bag.h>
 #include <sensor_msgs/CameraInfo.h>
@@ -46,6 +47,8 @@
 #include <tf2_sensor_msgs/tf2_sensor_msgs.h>
 #include <vision_msgs/Detection3DArray.h>
 
+#include <ctime>
+#include <filesystem>
 #include <opencv2/opencv.hpp>
 
 // #include <chrono>
@@ -174,6 +177,7 @@ private:
     current_inv_cam_tf_, current_inv_rob_tf_, lidar_to_camera_tf_;
   int bbox_pixels_to_pad_;
   double pcl_stale_time_, detection_confidence_threshold_, bbox_edge_x_, bbox_edge_y_;
+  std::string data_url_;
 
   // the optical frame of the RGB camera (not the camera base frame)
   std::string camera_optical_frame_, map_frame_, robot_frame_, lidar_frame_;

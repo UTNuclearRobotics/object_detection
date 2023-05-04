@@ -30,6 +30,7 @@
   <depend>cv_bridge</depend>
   <depend>std_msgs</depend>
   <depend>OpenCV</depend>
+  <depend>rospack</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>

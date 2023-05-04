@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0.2)
 project(pointcloud_processing)
 
 if(NOT "${CMAKE_CXX_STANDARD}")
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,6 +31,7 @@ find_package(catkin REQUIRED COMPONENTS
   detection_msgs
   cv_bridge
   std_msgs
+  rospack
 )
 
 # # System dependencies are found with CMake's conventions
@@ -57,6 +58,7 @@ catkin_package(
   detection_msgs
   cv_bridge
   std_msgs
+  rospack
 )
 
 # ##########
