@@ -13,6 +13,7 @@
   <arg name="camera_frame" default="$(arg robot)/$(arg camera_name)_$(arg camera_image_name)_optical_frame"/>
 
   <arg name="enable_http_server" default="false"/>
+  <!-- <arg name="http_server_address" default="localhost"/> -->
   <arg name="http_server_port" default="4002"/>
   <arg name="http_server_dir" default="$(find afc_demos)/detection_data"/>
 
@@ -24,6 +25,11 @@
     <arg name="base_frame" value="$(arg base_frame)" />
     <arg name="world_frame" value="$(arg world_frame)" />
     <arg name="camera_frame" value="$(arg camera_frame)" />
+
+    <arg name="save_data_directory" value="$(arg http_server_dir)"/>
+    <arg name="data_hosting_enabled" value="$(arg enable_http_server)"/>
+    <!-- <arg name="data_hosting_address" value="$(arg http_server_address)"/> -->
+    <arg name="data_hosting_port" value="$(arg http_server_port)"/>
   </include>
 
   <node pkg="augre_detections" type="augre_detections_node" name="augre_detections_node" respawn="false">
@@ -52,6 +58,6 @@
     <include file="$(find simple_http_server_ros)/launch/http_server.launch">
         <arg name="port" value="$(arg http_server_port)" />
         <arg name="directory" value="$(arg http_server_dir)" />
-    </inlude>
+    </include>
   </group>
 </launch>

@@ -54,38 +54,29 @@ ObjectPoseEstimation::ObjectPoseEstimation() : nh_(""), private_nh_("~")
 
   // if save data enabled then let's estabish the folder path
   if (save_det_data_) {
-    std::string data_folder_path;
-    data_folder_path = ros::package::getPath("afc_demos");
-
-    if (data_folder_path.empty()) {
-      data_folder_path = ros::package::getPath("object_detection");
-    }
-
-    if (data_folder_path.empty()) {
-      data_folder_path = ros::package::getPath("pointcloud_processing");
-    }
-
-    data_folder_path += "/detection_data/";
+    private_nh_.param<std::string>("save_data_directory", data_directory_path_, "/home");
+    data_directory_path_ += "/detection_data/";
 
     char date[100];
     std::time_t t = std::time(0);
     std::strftime(date, 100, "%Y-%m-%d_%H-%M-%S", std::localtime(&t));
     std::string date_string(date);
 
-    data_folder_path += date_string;
-    std::filesystem::create_directories(data_folder_path);
+    data_directory_path_ += date_string + "/";
+    std::filesystem::create_directories(data_directory_path_);
 
-    bool enable_http_server;
-    std::string ip_address, ip_port;
-    private_nh_.param<bool>("enable_http_server", enable_http_server, true);
+    bool data_hosting_enabled;
+    std::string ip_address;
+    int ip_port;
+    private_nh_.param<bool>("data_hosting_enabled", data_hosting_enabled, true);
 
-    if (enable_http_server) {
-      private_nh_.param<std::string>("http_server_ip_address", ip_address, "localhost");
-      private_nh_.param<std::string>("http_server_ip_port", ip_port, "8000");
+    if (data_hosting_enabled) {
+      private_nh_.param<std::string>("data_hosting_address", ip_address, "localhost");
+      private_nh_.param<int>("data_hosting_port", ip_port, 4002);
 
-      data_url_ = "http://" + ip_address + ":" + ip_port + data_folder_path;
+      data_url_ = "http://" + ip_address + ":" + std::to_string(ip_port) + "/detection_data/" + date_string + "/";
     } else {
-      data_url_ = data_folder_path;
+      data_url_ = data_directory_path_;
     }
   }
 }
@@ -265,10 +256,10 @@ void ObjectPoseEstimation::initiateDetections()
             if (snapshot.response.img_valid) {
               // save image to file
               try {
-                std::string img_file_name{object_publisher_prefix + ".png"};
+                std::string img_file_name{object_publisher_prefix + "_view1" + ".png"};
                 cv_bridge::CvImagePtr cv_ptr;
                 cv_ptr = cv_bridge::toCvCopy(snapshot.response.img, snapshot.response.img.encoding);
-                cv::imwrite(img_file_name, cv_ptr->image);
+                cv::imwrite(data_directory_path_ + img_file_name, cv_ptr->image);
 
                 std_msgs::String url;
                 url.data = data_url_ + img_file_name;
@@ -756,10 +747,10 @@ void ObjectPoseEstimation::updateRegisteredObject(
       // img url stuff
       if (snapshot.response.img_valid) {
         try {
-          std::string img_file_name{object_publisher_prefix + ".png"};
+          std::string img_file_name{object_publisher_prefix + "_view" + std::to_string(object_detections_[obj_index].camera_tfs.size()) + ".png"};
           cv_bridge::CvImagePtr cv_ptr;
           cv_ptr = cv_bridge::toCvCopy(snapshot.response.img, snapshot.response.img.encoding);
-          cv::imwrite(img_file_name, cv_ptr->image);
+          cv::imwrite(data_directory_path_ + img_file_name, cv_ptr->image);
 
           std_msgs::String url;
           url.data = data_url_ + img_file_name;
@@ -874,7 +865,7 @@ void ObjectPoseEstimation::publishDetection(const int obj_index)
 void ObjectPoseEstimation::saveBag()
 {
   rosbag::Bag bag;
-  bag.open("object_detections.bag", rosbag::bagmode::Write);
+  bag.open(data_directory_path_ + "object_detections.bag", rosbag::bagmode::Write);
   auto now = ros::Time::now();
 
   for (const ObjectPoseEstimation::ObjectDetection & obj : object_detections_) {
