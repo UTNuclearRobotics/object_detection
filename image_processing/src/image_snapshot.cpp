@@ -61,20 +61,37 @@ void ImageSnapshot::compressedImageCb(const sensor_msgs::CompressedImageConstPtr
 bool ImageSnapshot::sendSnapshot(
   image_processing::Snapshot::Request & req, image_processing::Snapshot::Response & res)
 {
-  res.camera_info = camera_info_;
-
-  if (ros::Time::now().toSec() - image_.header.stamp.toSec() < stale_time_) {
-    res.img = image_;
-    res.img_valid = true;
+  if (camera_info_.height == 0 || camera_info_.width == 0) {
+    ROS_WARN("Camera info not received. Camera info not sent with image snapshot");
   } else {
-    res.img_valid = false;
+    res.camera_info = camera_info_;
   }
 
-  if (ros::Time::now().toSec() - compressed_image_.header.stamp.toSec() < stale_time_) {
+  if (image_.data.empty()) {
+    ROS_WARN("Image not received. Image not sent with image snapshot");
+    res.img_valid = false;
+  } else if (ros::Time::now().toSec() - image_.header.stamp.toSec() > stale_time_) {
+    ROS_WARN_STREAM(
+      "Image stale: " << (ros::Time::now().toSec() - image_.header.stamp.toSec() - stale_time_)
+                      << " seconds too old.");
+    res.img_valid = false;
+  } else {
+    res.img = image_;
+    res.img_valid = true;
+  }
+
+  if (compressed_image_.data.empty()) {
+    ROS_WARN("Compressed image not received. Compressed image not sent with image snapshot");
+    res.cimg_valid = false;
+  } else if (ros::Time::now().toSec() - compressed_image_.header.stamp.toSec() > stale_time_) {
+    ROS_WARN_STREAM(
+      "Compressed image stale: " << (ros::Time::now().toSec() - image_.header.stamp.toSec() -
+                                     stale_time_)
+                                 << " seconds too old.");
+    res.cimg_valid = false;
+  } else {
     res.cimg = compressed_image_;
     res.cimg_valid = true;
-  } else {
-    res.cimg_valid = false;
   }
 
   return true;
