@@ -1,3 +1,6 @@
+data_hosting_address: 192.168.11.141
+# data_hosting_port: 4002
+
 # camera_optical_frame: "philbart/realsense_front_color_optical_frame"
 # robot_frame: "philbart/base_link"
 # map_frame: "philbart/static_map"

@@ -4,18 +4,37 @@
   <arg name="robot" default="walrus"/>
   <arg name="enable_darknet" default="false"/>
   <arg name="enable_retinanet" default="false"/>
+
   <arg name="camera_name" default="realsense_front"/>
   <arg name="camera_image_name" default="color"/>
+
+  <arg name="base_frame" default="$(arg robot)/base_link"/>
+  <arg name="world_frame" default="$(arg robot)/map"/>
+  <arg name="camera_frame" default="$(arg robot)/$(arg camera_name)_$(arg camera_image_name)_optical_frame"/>
+
+  <arg name="enable_http_server" default="false"/>
+  <!-- <arg name="http_server_address" default="localhost"/> -->
+  <arg name="http_server_port" default="4002"/>
+  <arg name="http_server_dir" default="$(find afc_demos)/detection_data"/>
 
   <include file="$(find object_detection)/launch/pose_estimation.launch">
     <arg name="robot" value="$(arg robot)" />
     <arg name="camera_name" value="$(arg camera_name)" />
     <arg name="camera_image_name" value="$(arg camera_image_name)" />
+    
+    <arg name="base_frame" value="$(arg base_frame)" />
+    <arg name="world_frame" value="$(arg world_frame)" />
+    <arg name="camera_frame" value="$(arg camera_frame)" />
+
+    <arg name="save_data_directory" value="$(arg http_server_dir)"/>
+    <arg name="data_hosting_enabled" value="$(arg enable_http_server)"/>
+    <!-- <arg name="data_hosting_address" value="$(arg http_server_address)"/> -->
+    <arg name="data_hosting_port" value="$(arg http_server_port)"/>
   </include>
 
-  <include file="$(find augre_detections)/launch/augre_detections.launch">
-    <arg name="robot" value="$(arg robot)" />
-  </include>
+  <node pkg="augre_detections" type="augre_detections_node" name="augre_detections_node" respawn="false">
+    <remap from="detection" to="object_pose_estimation/detection"/>
+  </node>
 
   <group if="$(arg enable_darknet)">
     <include file="$(find object_detection)/launch/darknet_detection.launch">
@@ -33,5 +52,12 @@
         <arg name="camera_image_name" value="$(arg camera_image_name)" />
       </include>
     </group>
+  </group>
+
+  <group if="$(arg enable_http_server)">
+    <include file="$(find simple_http_server_ros)/launch/http_server.launch">
+        <arg name="port" value="$(arg http_server_port)" />
+        <arg name="directory" value="$(arg http_server_dir)" />
+    </include>
   </group>
 </launch>

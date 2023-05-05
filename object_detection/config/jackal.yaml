@@ -1,3 +1,6 @@
+data_hosting_address: 192.168.11.131
+# data_hosting_port: 4002
+
 # camera_optical_frame: "jackal/realsense_front_color_optical_frame"
 # robot_frame: "jackal/base_link"
 # map_frame: "jackal/static_map"

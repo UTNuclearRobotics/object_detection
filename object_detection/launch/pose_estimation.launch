@@ -10,23 +10,33 @@
   <arg name="camera_name" default="realsense_front"/>
   <arg name="camera_image_name" default="color"/>
 
-  <group ns="$(arg robot)">
-    <node pkg="pointcloud_processing" type="object_pose_estimation" name="object_pose_estimation" output="screen">
-      <rosparam command="load" file="$(find object_detection)/config/$(arg robot).yaml" />
-      <param name="map_frame" value="$(arg robot)/map" unless="$(arg static)"/>
-      <!-- <param name="map_frame" value="$(arg robot)/static_map" if="$(arg static)"/> -->
-      <param name="map_frame" value="world" if="$(arg static)"/>
-      <param name="robot_frame" value="$(arg robot)/base_link"/>
-      <param name="camera_optical_frame" value="$(arg robot)/$(arg camera_name)_$(arg camera_image_name)_optical_frame"/>
-      
-      <param name="save_all_detection_data" value="$(arg save_all_detection_data)"/>
-      <param name="publish_all_detection_data" value="$(arg publish_all_detection_data)"/>
-      
-      <remap from="camera_info" to="$(arg camera_name)/$(arg camera_image_name)/camera_info"/>
-      <remap from="bounding_boxes" to="darknet_ros/bounding_boxes"/>
-      <remap from="pointcloud" to="lidar_points"/>
-      <remap from="image_snapshot" to="image_snapshot/send_snapshot"/>
-    </node>
-  </group>
+  <arg name="base_frame" default="$(arg robot)/base_link"/>
+  <arg name="world_frame" default="$(arg robot)/map"/>
+  <arg name="camera_frame" default="$(arg robot)/$(arg camera_name)_$(arg camera_image_name)_optical_frame"/>
+
+  <arg name="save_data_directory" default="$(find object_detection)"/>
+  <arg name="data_hosting_enabled" default="false"/>
+  <!-- <arg name="data_hosting_address" default="localhost"/> -->
+  <arg name="data_hosting_port" default="4002"/>
+
+  <node pkg="pointcloud_processing" type="object_pose_estimation" name="object_pose_estimation" output="screen">
+    <rosparam command="load" file="$(find object_detection)/config/$(arg robot).yaml" />
+    <param name="map_frame" value="$(arg world_frame)"/>
+    <param name="robot_frame" value="$(arg base_frame)"/>
+    <param name="camera_optical_frame" value="$(arg camera_frame)"/>
+    
+    <param name="save_all_detection_data" value="$(arg save_all_detection_data)"/>
+    <param name="publish_all_detection_data" value="$(arg publish_all_detection_data)"/>
+    
+    <param name="save_data_directory" value="$(arg save_data_directory)"/>
+    <param name="data_hosting_enabled" value="$(arg data_hosting_enabled)"/>
+    <!-- <param name="data_hosting_address" value="$(arg data_hosting_address)"/> -->
+    <param name="data_hosting_port" value="$(arg data_hosting_port)"/>
+
+    <remap from="camera_info" to="$(arg camera_name)/$(arg camera_image_name)/camera_info"/>
+    <remap from="bounding_boxes" to="darknet_ros/bounding_boxes"/>
+    <remap from="pointcloud" to="lidar_points"/>
+    <remap from="image_snapshot" to="image_snapshot/send_snapshot"/>
+  </node>
 
 </launch>
