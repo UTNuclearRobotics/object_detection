@@ -34,6 +34,7 @@
 
   <node pkg="augre_detections" type="augre_detections_node" name="augre_detections_node" respawn="false">
     <remap from="detection" to="object_pose_estimation/detection"/>
+    <param name="robot" value="$(arg robot)"/>
   </node>
 
   <group if="$(arg enable_darknet)">
