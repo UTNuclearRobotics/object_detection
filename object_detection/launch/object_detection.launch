@@ -12,7 +12,7 @@
   <arg name="world_frame" default="$(arg robot)/map"/>
   <arg name="camera_frame" default="$(arg robot)/$(arg camera_name)_$(arg camera_image_name)_optical_frame"/>
 
-  <arg name="enable_http_server" default="false"/>
+  <arg name="enable_http_server" default="true"/>
   <!-- <arg name="http_server_address" default="localhost"/> -->
   <arg name="http_server_port" default="4002"/>
   <arg name="http_server_dir" default="$(find afc_demos)/detection_data"/>
