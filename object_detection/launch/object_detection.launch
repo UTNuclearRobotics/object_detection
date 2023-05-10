@@ -17,7 +17,11 @@
   <arg name="http_server_port" default="4002"/>
   <arg name="http_server_dir" default="$(find afc_demos)/detection_data"/>
 
+  <arg name="object_pose_estimation_yaml" default="$(find object_detection)/config/example.yaml"/>
+
   <include file="$(find object_detection)/launch/pose_estimation.launch">
+    <arg name="config_file" value="$(arg object_pose_estimation_yaml)" />
+
     <arg name="robot" value="$(arg robot)" />
     <arg name="camera_name" value="$(arg camera_name)" />
     <arg name="camera_image_name" value="$(arg camera_image_name)" />
