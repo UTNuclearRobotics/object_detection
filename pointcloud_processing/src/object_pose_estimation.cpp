@@ -229,6 +229,9 @@ void ObjectPoseEstimation::initiateDetections()
         new_obj.camera_tfs.push_back(current_camera_tf_);
         new_obj.inv_camera_tfs.push_back(current_inv_cam_tf_);
 
+        std_msgs::String url;
+        new_obj.img_urls.push_back(url);
+
         std::string object_publisher_prefix{
           "obj" + std::to_string(object_detections_.size() + 1) + "_" + new_obj.object_class};
 
@@ -261,10 +264,8 @@ void ObjectPoseEstimation::initiateDetections()
                 cv_ptr = cv_bridge::toCvCopy(snapshot.response.img, snapshot.response.img.encoding);
                 cv::imwrite(data_directory_path_ + img_file_name, cv_ptr->image);
 
-                std_msgs::String url;
                 url.data = data_url_ + img_file_name;
-
-                new_obj.img_urls.push_back(url);
+                new_obj.img_urls.back() = url;
 
                 if (pub_det_data_) {
                   new_obj.url_puber.push_back(nh_.advertise<std_msgs::String>(
@@ -279,7 +280,7 @@ void ObjectPoseEstimation::initiateDetections()
               }
             }
           } else {
-            ROS_DEBUG("Image Snapshot failed to call");
+            ROS_WARN("Image Snapshot failed to call. Could not obtain and save the image for the new detection.");
           }
 
           if (pub_det_data_) {
