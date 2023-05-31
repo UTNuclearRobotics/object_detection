@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <arg name="robot" default="philbart"/>
+  <arg name="enable_darknet" default="false"/>
+  <arg name="enable_retinanet" default="false"/>
+
+  <arg name="camera_name" default="oakd"/>
+  <arg name="camera_image_name" default="color"/>
+
+  <arg name="base_frame" default="$(arg robot)/base_link"/>
+  <arg name="camera_frame" default="$(arg robot)/$(arg camera_name)_$(arg camera_image_name)_optical_frame"/>
+
+  <arg name="object_pose_estimation_yaml" default="$(find object_detection)/config/example.yaml"/>
+
+  <include file="$(find object_detection)/launch/detection_streamer.launch">
+    <arg name="config_file" value="$(arg object_pose_estimation_yaml)" />
+
+    <arg name="robot" value="$(arg robot)" />
+    <arg name="camera_name" value="$(arg camera_name)" />
+    <arg name="camera_image_name" value="$(arg camera_image_name)" />
+    
+    <arg name="base_frame" value="$(arg base_frame)" />
+    <arg name="camera_frame" value="$(arg camera_frame)" />
+  </include>
+
+  <group if="$(arg enable_darknet)">
+    <include file="$(find object_detection)/launch/darknet_detection.launch">
+      <arg name="robot" value="$(arg robot)" />
+      <arg name="camera_name" value="$(arg camera_name)" />
+      <arg name="camera_image_name" value="$(arg camera_image_name)" />
+    </include>
+  </group>
+
+  <group unless="$(arg enable_darknet)">
+    <group if="$(arg enable_retinanet)">
+      <include file="$(find object_detection)/launch/retinanet_detection.launch">
+        <arg name="robot" value="$(arg robot)" />
+        <arg name="camera_name" value="$(arg camera_name)" />
+        <arg name="camera_image_name" value="$(arg camera_image_name)" />
+      </include>
+    </group>
+  </group>
+</launch>

@@ -37,15 +37,12 @@ ObjectDetectionStreamer::ObjectDetectionStreamer() : nh_(""), private_nh_("~")
   camera_info_sub_ = nh_.subscribe("camera_info", 1, &ObjectDetectionStreamer::cameraInfoCb, this);
 
   detections_pub_ = private_nh_.advertise<vision_msgs::Detection3DArray>("detections", 1);
-  lidar_fov_pub_ = private_nh_.advertise<sensor_msgs::PointCloud2>("lidar_fov", 1);
-  lidar_det_pub_ = private_nh_.advertise<sensor_msgs::PointCloud2>("lidar_det", 1);
+  lidar_fov_pub_ = private_nh_.advertise<sensor_msgs::PointCloud2>("camera_fov_cloud", 1);
+  lidar_det_pub_ = private_nh_.advertise<sensor_msgs::PointCloud2>("detection_cloud", 1);
 
   private_nh_.param<std::string>("robot_frame", robot_frame_, "base_link");
   private_nh_.param<std::string>(
     "camera_optical_frame", camera_optical_frame_, "camera_optical_link");
-
-  ROS_DEBUG_STREAM("ROBOT FRAME PARAM: " << robot_frame_);
-  ROS_DEBUG_STREAM("CAMERA OPT FRAME PARAM: " << camera_optical_frame_);
 
   private_nh_.param<int>("bbox_pixel_padding", bbox_pixels_to_pad_, 0);
   private_nh_.param<double>("pointcloud_stale_time", pcl_stale_time_, 0.05);
@@ -252,11 +249,8 @@ void ObjectDetectionStreamer::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
 
   // check if pointcloud is stale
   if (ros::Time::now().toSec() - input_cloud.header.stamp.toSec() > pcl_stale_time_) {
-    return;
-  }
+    ROS_WARN("Pointcloud being passed into object detection is stale.");
 
-  // check that we've received bounding boxes
-  if (current_boxes_.bounding_boxes.empty()) {
     return;
   }
 
@@ -297,6 +291,11 @@ void ObjectDetectionStreamer::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
   sensor_msgs::PointCloud2 pc2_out;
   pcl::toROSMsg(*cloud_fov, pc2_out);
   lidar_fov_pub_.publish(pc2_out);
+
+  // check that we've received bounding boxes
+  if (current_boxes_.bounding_boxes.empty()) {
+    return;
+  }
 
   ObjectDetectionStreamer::CloudPtr output_cloud(new ObjectDetectionStreamer::Cloud);
   pcl::toROSMsg(*output_cloud, pc2_out);
@@ -351,12 +350,14 @@ void ObjectDetectionStreamer::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
 
       // add new detection to unassigned detections vector
       vision_msgs::Detection3D new_detection;
+      vision_msgs::ObjectHypothesisWithPose new_result;
       new_detection.header.stamp = ros::Time::now();
       new_detection.header.frame_id = obj_cloud.header.frame_id;
-      new_detection.results[0].id = box.id;
-      new_detection.results[0].score = box.probability;
-      new_detection.results[0].pose.pose.position = center_pt;
-      new_detection.results[0].pose.pose.orientation.w = 1;
+      new_result.id = box.id;
+      new_result.score = box.probability;
+      new_result.pose.pose.position = center_pt;
+      new_result.pose.pose.orientation.w = 1;
+      new_detection.results.push_back(new_result);
       new_detection.bbox.center.position = center_pt;
       new_detection.bbox.center.orientation.w = 1;
       new_detection.source_cloud = obj_cloud;
@@ -377,6 +378,8 @@ void ObjectDetectionStreamer::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
     }
   }
 
+  pc2_out.header.stamp = ros::Time::now();
+  pc2_out.header.frame_id = robot_frame_;
   lidar_det_pub_.publish(pc2_out);
   detections_pub_.publish(detections);
 

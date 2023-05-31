@@ -37,6 +37,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_sensor_msgs/tf2_sensor_msgs.h>
 #include <vision_msgs/Detection3DArray.h>
+#include <vision_msgs/ObjectHypothesisWithPose.h>
 
 #include <chrono>
 
@@ -103,9 +104,6 @@ public:
   void initiateDetections();
 
 private:
-// macros
-#define UNKNOWN_OBJECT_ID -1
-
   typedef struct
   {
     int32_t x;

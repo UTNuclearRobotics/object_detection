@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  <arg name="robot" default="walrus"/>
+
+  <arg name="camera_name" default="realsense_front"/>
+  <arg name="camera_image_name" default="color"/>
+
+  <arg name="base_frame" default="$(arg robot)/base_link"/>
+  <arg name="camera_frame" default="$(arg robot)/$(arg camera_name)_$(arg camera_image_name)_optical_frame"/>
+
+  <arg name="config_file" default="$(find object_detection)/config/example.yaml"/>
+
+  <node pkg="pointcloud_processing" type="object_detection_streamer" name="object_detection_streamer" output="screen">
+    <rosparam command="load" file="$(arg config_file)"/>
+    <param name="robot_frame" value="$(arg base_frame)"/>
+    <param name="camera_optical_frame" value="$(arg camera_frame)"/>
+
+    <remap from="camera_info" to="$(arg camera_name)/$(arg camera_image_name)/camera_info"/>
+    <remap from="bounding_boxes" to="darknet_ros/bounding_boxes"/>
+    <remap from="pointcloud" to="lidar_points"/>
+    <remap from="image_snapshot" to="image_snapshot/send_snapshot"/>
+  </node>
+</launch>
