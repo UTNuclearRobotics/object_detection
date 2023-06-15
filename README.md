@@ -28,13 +28,13 @@ This package contains one node that make it simpler to get a single snapshot fro
 
 ###### Subscribers
 
-`image` - Type: sensor_msgs/Image
-`image/compressed` - Type: sensor_msgs/CompressedImage
-`camera_info` - Type: sensor_msgs/CameraInfo
+- `image` - Type: sensor_msgs/Image
+- `image/compressed` - Type: sensor_msgs/CompressedImage
+- `camera_info` - Type: sensor_msgs/CameraInfo
 
 ###### Service Server
 
-`send_snapshot`
+- `send_snapshot`
     - Type: image_processing/Snapshot
     - Return: CameraInfo if available. Image if img_valid is True and CompressedImage if cimg_valid is True. 
 
@@ -52,62 +52,62 @@ This node was made in the process of making the larger and more sophisticated `o
 
 ###### Subscribers
 
-`bounding_boxes` 
+- `bounding_boxes` 
     - Type: darknet_ros_msgs/BoundingBoxes
     - Note: Live bounding box information generated from your desired object detection model.  Class, probability, and the bounding boxes must be valid.
-`camera_info`
+- `camera_info`
     - Type: sensor_msgs/CameraInfo
     - Note: This data must be correct and valid for the camera including TF frame
-`pointcloud`
+- `pointcloud`
     - Type: sensor_msgs/PointCloud2
     - Note: The entire pointcloud coming from a LiDAR or any other sensor generating a valid pointcloud with proper TF frame
 
 ###### Publishers
 
-`detections`
+- `detections`
     - Type: vision_msgs/Detection3DArray
     - Note: output of all processed detections with associated pointcloud
-`camera_fov_cloud`
+- `camera_fov_cloud`
     - Type: sensor_msgs/PointCloud2
     - Note: the input pointcloud after it has been filtered down to the FOV of the camera.  This is used more for debugging to ensure your sensor data and their transforms are setup properly.
-`detection_cloud`
+- `detection_cloud`
     - Type: sensor_msgs/PointCloud2
     - Note: the input pointcloud after it has been filtered down to each detections' bounding box. This should look like a flashlight version of the pointcloud that is shining on the object(s) you are detecting.
 
 ###### Params
 
-`object_classes`
+- `object_classes`
     - Type: vector<string> (see example.yaml for this)
     - Note: REQUIRED. List of all the object class types you want to detect. These string must match with the output from your model's darknet bounding boxes output.
-`robot_frame`
+- `robot_frame`
     - Type: string
     - Default: `base_link`
     - Note: Base frame of the robot. MUST BE VALID!
-`camera_optical_frame`
+- `camera_optical_frame`
     - Type: string
     - Default: `camera_optical_frame`
     - Note: The ***optical*** frame of the camera. Generally this frame is in Z-forward, X-right relative to the base camera link. MUST BE VALID!
-`pointcloud_stale_time`
+- `pointcloud_stale_time`
     - Type: double
     - Default: 0.05
     - Note: In the pointcloud callback the pointcloud timestamp is checked to ensure that the pointcloud is not older than this value in seconds. If so, it is ignored.
-`confidence_threshold`
+- `confidence_threshold`
     - Type: double
     - Default: 0.75
     - Note: this value determines whether object detected should be processed.  The probability from the detection in the bounding boxes message must be higher than this value for the object to processed and output by this node.
-`bbox_pixel_padding`
+- `bbox_pixel_padding`
     - Type: int
     - Default: 0
     - Note: Number of pixels (in all directions) to add or subtract from the incoming bounding boxes when processing the detections.  Less means a tighter bounding box. More opens up the bounding box.
-`bbox_edge`
+- `bbox_edge`
     - Type: bool
     - Default: true
     - Note: When true, this node will check to see if the bounding box is within `bbox_edge_x`% of the edge of the image in the width direction and `bbox_edge_y`% of the edge of the image in height direction.  If so, it will ignore that bounding box until the bounding box is closer to the center.
-`bbox_edge_x`
+- `bbox_edge_x`
     - Type: double
     - Default: 0.1
     - Note: only used if `bbox_edge` is True.  This means by default any bounding box that is within the 10% of the far left or far right of the image will be ignored.
-`bbox_edge_y`
+- `bbox_edge_y`
     - Type: double
     - Default: 0.01
     - Note: only used if `bbox_edge` is True.  This means by default any bounding box that is within the 1% of the top or bottom of the image will be ignored.
@@ -118,124 +118,124 @@ This node tracks the position of objects detected in the environment by a mobile
 
 ###### Subscribers
 
-`bounding_boxes` 
+- `bounding_boxes` 
     - Type: darknet_ros_msgs/BoundingBoxes
     - Note: Live bounding box information generated from your desired object detection model.  Class, probability, and the bounding boxes must be valid.
-`camera_info`
+- `camera_info`
     - Type: sensor_msgs/CameraInfo
     - Note: This data must be correct and valid for the camera including TF frame
-`pointcloud`
+- `pointcloud`
     - Type: sensor_msgs/PointCloud2
     - Note: The entire pointcloud coming from a LiDAR or any other sensor generating a valid pointcloud with proper TF frame
 
 ###### Publishers
 
-`detection`
+- `detection`
     - Type: detection_msgs/Detection
     - Note: output of a single processed detection
-`detected_objects`
+- `detected_objects`
     - Type: detection_msgs/DetectionArray
     - Note: output of all detected objects and their associated data once a new sighting is registered
-`camera_fov_cloud`
+- `camera_fov_cloud`
     - Type: sensor_msgs/PointCloud2
     - Note: the input pointcloud after it has been filtered down to the FOV of the camera.  This is used more for debugging to ensure your sensor data and their transforms are setup properly.
-`detection_cloud`
+- `detection_cloud`
     - Type: sensor_msgs/PointCloud2
     - Note: the input pointcloud after it has been filtered down to each detections' bounding box. This should look like a flashlight version of the pointcloud that is shining on the object(s) you are detecting.
 
 ###### Service Servers
 
-`publish_data`
+- `publish_data`
     - Type: std_srvs/Empty
     - Note: this simply triggers a publish of `detected_objects`
-`save_bag`
+- `save_bag`
     - Type: std_srvs/Empty
     - Note: this triggers a bag save of all currently stored detection data
 
 ###### Service Clients
 
-`image_snapshot/send_snapshot`
+- `image_snapshot/send_snapshot`
     - Type: image_processing/Snapshot
     - Note: this must be properly connected to the image snapshot service server for any detection images to be stored
 
 ###### Params
 
-`object_classes`
+- `object_classes`
     - Type: vector<string> (see example.yaml for this)
     - Note: REQUIRED. List of all the object class types you want to detect. These string must match with the output from your model's darknet bounding boxes output.
-`robot_frame`
+- `robot_frame`
     - Type: string
     - Default: `base_link`
     - Note: Base frame of the robot. MUST BE VALID!
-`camera_optical_frame`
+- `camera_optical_frame`
     - Type: string
     - Default: `camera_optical_frame`
     - Note: The ***optical*** frame of the camera. Generally this frame is in Z-forward, X-right relative to the base camera link. MUST BE VALID!
-`map_frame`
+- `map_frame`
     - Type: string
     - Default: `map`
     - Note: The map frame (or world frame) which is the static reference frame for robot navigation. MUST BE VALID!
-`pointcloud_stale_time`
+- `pointcloud_stale_time`
     - Type: double
     - Default: 0.05
     - Note: In the pointcloud callback the pointcloud timestamp is checked to ensure that the pointcloud is not older than this value in seconds. If so, it is ignored.
-`confidence_threshold`
+- `confidence_threshold`
     - Type: double
     - Default: 0.75
     - Note: this value determines whether object detected should be processed.  The probability from the detection in the bounding boxes message must be higher than this value for the object to processed and output by this node.
-`robot_movement_threshold` 
+- `robot_movement_threshold` 
     - Type: double
     - Default: 2.0
     - Note: The minimum distance in meters the robot needs to travel before it begins looking for a new object.  It is reset once a object is seen.
-`robot_turning_threshold`
+- `robot_turning_threshold`
     - Type: double
     - Default: 0.1
     - Note: the amount (in radians per cycle) that the robot's orientation can rotate before looking for a object.  Generally, it is object pose estimate works best if the robot is not rotating while a object is detected.  This allows for the user to tune how much their robot rotation affects object pose estimate.  
-`distance_between_objects` 
+- `distance_between_objects` 
     - Type: double
     - Default: 10.0
     - Note: if a object is seen but cannot be matched with a previously observed object it will check if the estimated pose of the new detection is within this distance from a previously observed object.  If it is then this new data will be tossed out as an anomaly that it could not be registered.  Generally this would occur if robot localization is not perfect.
-`sleep_period`
+- `sleep_period`
     - Type: double
     - Default: 0.1
     - Note: the time (in seconds) to sleep in between ROS cycles.  
-`bbox_pixel_padding`
+- `bbox_pixel_padding`
     - Type: int
     - Default: 0
     - Note: Number of pixels (in all directions) to add or subtract from the incoming bounding boxes when processing the detections.  Less means a tighter bounding box. More opens up the bounding box.
-`bbox_edge`
+- `bbox_edge`
     - Type: bool
     - Default: true
     - Note: When true, this node will check to see if the bounding box is within `bbox_edge_x`% of the edge of the image in the width direction and `bbox_edge_y`% of the edge of the image in height direction.  If so, it will ignore that bounding box until the bounding box is closer to the center.
-`bbox_edge_x`
+- `bbox_edge_x`
     - Type: double
     - Default: 0.1
     - Note: only used if `bbox_edge` is True.  This means by default any bounding box that is within the 10% of the far left or far right of the image will be ignored.
-`bbox_edge_y`
+- `bbox_edge_y`
     - Type: double
     - Default: 0.01
     - Note: only used if `bbox_edge` is True.  This means by default any bounding box that is within the 1% of the top or bottom of the image will be ignored.
-`save_all_detection_data`
+- `save_all_detection_data`
     - Type: bool
     - Default: true
     - Note: if true this node will save images and raw more detailed pointclouds and tfs from each view of each detection
-`save_data_directory`
+- `save_data_directory`
     - Type: string
     - Default: "/home"
     - Note: the directory where you prefer all the detection data (bags and images) to be stored if `save_all_detection_data` is enabled
-`save_bag_on_shutdown`
+- `save_bag_on_shutdown`
     - Type: bool
     - Default: false
     - Note: saves a bag of all in the data in object_detections_ when the node is shutdown. A bag can also be saved by calling the `save_bag` service. 
-`data_hosting_enabled`
+- `data_hosting_enabled`
     - Type: bool
     - Default: true
     - Note: if `save_all_detection_data` is enabled and this is true the output urls for each image will be an http formatted url file path.
-`data_hosting_address`
+- `data_hosting_address`
     - Type: string
     - Default: 'localhost'
     - Note: if `save_all_detection_data` is enabled and `data_hosting_enabled` is true this will be IP address for the image url for each detection.
-`data_hosting_port`
+- `data_hosting_port`
     - Type: int
     - Default: 4002
     - Note: if `save_all_detection_data` is enabled and `data_hosting_enabled` is true this will be IP port for the image url for each detection.
