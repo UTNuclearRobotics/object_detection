@@ -74,11 +74,9 @@ include_directories(
 
 add_executable(object_detection_streamer src/object_detection_streamer.cpp)
 add_executable(object_pose_estimation src/object_pose_estimation.cpp)
-add_executable(image_buffer src/image_buffer.cpp)
 
 target_link_libraries(object_detection_streamer ${catkin_LIBRARIES})
 target_link_libraries(object_pose_estimation ${catkin_LIBRARIES} ${OpenCV_LIBS})
-target_link_libraries(image_buffer ${catkin_LIBRARIES})
 
 add_dependencies(object_pose_estimation ${${PROJECT_NAME}_exported_objects} ${catkin_EXPORTED_TARGETS})
 
