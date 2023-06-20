@@ -11,7 +11,6 @@
 
   <arg name="base_frame" default="$(arg robot)/base_link"/>
   <arg name="world_frame" default="$(arg robot)/map"/>
-  <arg name="camera_frame" default="$(arg robot)/$(arg camera_name)_$(arg camera_image_name)_optical_frame"/>
 
   <arg name="save_data_directory" default="$(find object_detection)"/>
   <arg name="data_hosting_enabled" default="true"/>
@@ -24,7 +23,6 @@
     <rosparam command="load" file="$(arg config_file)"/>
     <param name="map_frame" value="$(arg world_frame)"/>
     <param name="robot_frame" value="$(arg base_frame)"/>
-    <param name="camera_optical_frame" value="$(arg camera_frame)"/>
     
     <param name="save_all_detection_data" value="$(arg save_all_detection_data)"/>
     <param name="publish_all_detection_data" value="$(arg publish_all_detection_data)"/>

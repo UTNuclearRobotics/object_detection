@@ -28,7 +28,6 @@
     
     <arg name="base_frame" value="$(arg base_frame)" />
     <arg name="world_frame" value="$(arg world_frame)" />
-    <arg name="camera_frame" value="$(arg camera_frame)" />
 
     <arg name="save_data_directory" value="$(arg http_server_dir)"/>
     <arg name="data_hosting_enabled" value="$(arg enable_http_server)"/>
