@@ -40,10 +40,6 @@ ObjectDetectionStreamer::ObjectDetectionStreamer() : nh_(""), private_nh_("~")
   lidar_fov_pub_ = private_nh_.advertise<sensor_msgs::PointCloud2>("camera_fov_cloud", 1);
   lidar_det_pub_ = private_nh_.advertise<sensor_msgs::PointCloud2>("detection_cloud", 1);
 
-  private_nh_.param<std::string>("robot_frame", robot_frame_, "base_link");
-  private_nh_.param<std::string>(
-    "camera_optical_frame", camera_optical_frame_, "camera_optical_link");
-
   private_nh_.param<int>("bbox_pixel_padding", bbox_pixels_to_pad_, 0);
   private_nh_.param<double>("pointcloud_stale_time", pcl_stale_time_, 0.05);
   private_nh_.param<double>("confidence_threshold", detection_confidence_threshold_, 0.75);
@@ -75,6 +71,7 @@ void ObjectDetectionStreamer::bBoxCb(const darknet_ros_msgs::BoundingBoxesConstP
    */
 void ObjectDetectionStreamer::cameraInfoCb(const sensor_msgs::CameraInfoConstPtr msg)
 {
+  camera_optical_frame_ = msg->header.frame_id;
   camera_info_ = *msg;
 }
 
@@ -91,17 +88,10 @@ inline ObjectDetectionStreamer::PixelCoords ObjectDetectionStreamer::poseToPixel
   const ObjectDetectionStreamer::PointType & point, const sensor_msgs::CameraInfo & camera_info)
 {
   ObjectDetectionStreamer::PixelCoords result;
-  auto t1 = debug_clock_.now();
 
   result.x = camera_info.K[0] * point.x / point.z + camera_info.K[2];
   result.y = camera_info.K[4] * point.y / point.z + camera_info.K[5];
   result.z = point.z;
-  auto t2 = debug_clock_.now();
-  if (std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() > 1) {
-    ROS_DEBUG_STREAM(
-      "TIME POSE TO PIXEL: "
-      << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
-  }
   return result;
 }
 
@@ -117,19 +107,11 @@ std::vector<ObjectDetectionStreamer::PixelCoords>
 ObjectDetectionStreamer::convertCloudToPixelCoords(
   const ObjectDetectionStreamer::CloudPtr cloud, const sensor_msgs::CameraInfo & camera_info)
 {
-  auto t1 = debug_clock_.now();
   std::vector<ObjectDetectionStreamer::PixelCoords> output;
   output.reserve(cloud->size());
 
   for (const ObjectDetectionStreamer::PointType & point : cloud->points) {
     output.push_back(poseToPixel(point, camera_info));
-  }
-  auto t2 = debug_clock_.now();
-  // std::chrono::duration_cast<std::chrono::milliseconds> tme = t2 - t1;
-  if (std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() > 1) {
-    ROS_DEBUG_STREAM(
-      "TIME CONVERT CLOUD TO PIXELS: "
-      << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
   }
   return output;
 }
@@ -178,19 +160,15 @@ ObjectDetectionStreamer::CloudPtr ObjectDetectionStreamer::filterPointsInBox(
   const std::vector<ObjectDetectionStreamer::PixelCoords> & pixel_coordinates, const int xmin,
   const int xmax, const int ymin, const int ymax)
 {
-  auto t1 = debug_clock_.now();
   pcl::PointIndices::Ptr indices_in_bbox(new pcl::PointIndices());
   indices_in_bbox->indices.reserve(input->size());
 
-  int pixels_to_pad;
-  private_nh_.param<int>("bbox_pixel_padding", pixels_to_pad, 0);
-
   for (int i = 0; i < pixel_coordinates.size(); ++i) {
     if (
-      pixel_coordinates[i].z > 0 && pixel_coordinates[i].x > (xmin - pixels_to_pad) &&
-      pixel_coordinates[i].x < (xmax + pixels_to_pad) &&
-      pixel_coordinates[i].y > (ymin - pixels_to_pad) &&
-      pixel_coordinates[i].y < (ymax + pixels_to_pad)) {
+      pixel_coordinates[i].z > 0 && pixel_coordinates[i].x > (xmin - bbox_pixels_to_pad_) &&
+      pixel_coordinates[i].x < (xmax + bbox_pixels_to_pad_) &&
+      pixel_coordinates[i].y > (ymin - bbox_pixels_to_pad_) &&
+      pixel_coordinates[i].y < (ymax + bbox_pixels_to_pad_)) {
       indices_in_bbox->indices.push_back(i);
     }
   }
@@ -204,19 +182,12 @@ ObjectDetectionStreamer::CloudPtr ObjectDetectionStreamer::filterPointsInBox(
   bbox_filter.setNegative(false);
   bbox_filter.filter(*cloud_in_bbox);
 
-  auto t2 = debug_clock_.now();
-  if (std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count() > 1) {
-    ROS_DEBUG_STREAM(
-      "TIME FILTER POINTS IN BOX: "
-      << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
-  }
   return cloud_in_bbox;
 }
 
 bool ObjectDetectionStreamer::transformPointCloud2(
   sensor_msgs::PointCloud2 & pointcloud, const std::string object_frame)
 {
-  auto t1 = debug_clock_.now();
   geometry_msgs::TransformStamped transform;
   try {
     transform = tf_buffer_.lookupTransform(
@@ -227,10 +198,6 @@ bool ObjectDetectionStreamer::transformPointCloud2(
   }
 
   tf2::doTransform(pointcloud, pointcloud, transform);
-
-  auto t2 = debug_clock_.now();
-  ROS_DEBUG_STREAM(
-    "TIME TF PC: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
   return true;
 }
 
@@ -241,29 +208,23 @@ bool ObjectDetectionStreamer::transformPointCloud2(
    */
 void ObjectDetectionStreamer::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
 {
-  auto t1 = debug_clock_.now();
-  if (lidar_frame_.empty()) {
-    lidar_frame_ = input_cloud.header.frame_id;
-    return;
-  }
-
   // check if pointcloud is stale
   if (ros::Time::now().toSec() - input_cloud.header.stamp.toSec() > pcl_stale_time_) {
     ROS_WARN("Pointcloud being passed into object detection is stale.");
-
     return;
   }
+
+  lidar_frame_ = input_cloud.header.frame_id;
+
+  // check the lidar and camera frames are filled out
+  if (lidar_frame_.empty() || camera_optical_frame_.empty()) return;
 
   // check that we've received camera info
-  if (camera_info_.height == 0 || camera_info_.width == 0) {
-    return;
-  }
+  if (camera_info_.height == 0 || camera_info_.width == 0) return;
 
   // transform the pointcloud into the RGB optical frame
   if (tf2::getFrameId(input_cloud) != camera_optical_frame_) {
-    if (!transformPointCloud2(input_cloud, camera_optical_frame_)) {
-      return;
-    }
+    if (!transformPointCloud2(input_cloud, camera_optical_frame_)) return;
   }
 
   // Convert sensor_msgs::PointCloud2 to pcl::PointCloud
@@ -293,16 +254,14 @@ void ObjectDetectionStreamer::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
   lidar_fov_pub_.publish(pc2_out);
 
   // check that we've received bounding boxes
-  if (current_boxes_.bounding_boxes.empty()) {
-    return;
-  }
+  if (current_boxes_.bounding_boxes.empty()) return;
 
   ObjectDetectionStreamer::CloudPtr output_cloud(new ObjectDetectionStreamer::Cloud);
   pcl::toROSMsg(*output_cloud, pc2_out);
 
   vision_msgs::Detection3DArray detections;
   detections.header.stamp = ros::Time::now();
-  detections.header.frame_id = robot_frame_;
+  detections.header.frame_id = lidar_frame_;
   detections.detections.reserve(current_boxes_.bounding_boxes.size());
 
   // check if any bounding boxes are on or near the edge of the camera image.  If so remove them and return if none left
@@ -312,23 +271,10 @@ void ObjectDetectionStreamer::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
     if (box.probability >= detection_confidence_threshold_ && object_classes.count(box.Class)) {
       if (bbox_edge_) {
         // check for bounding boxes being close to edges
-        if (box.xmin < camera_info_.width * bbox_edge_x_) {
-          ROS_DEBUG("BBOX EDGE LEFT");
-          continue;
-        }
-        if (box.xmax > (camera_info_.width - (camera_info_.width * bbox_edge_x_))) {
-          ROS_DEBUG("BBOX EDGE RIGHT");
-          continue;
-        }
-
-        if (box.ymin < camera_info_.height * bbox_edge_y_) {
-          ROS_DEBUG("BBOX EDGE TOP");
-          continue;
-        }
-        if (box.ymax > (camera_info_.height - (camera_info_.height * bbox_edge_y_))) {
-          ROS_DEBUG("BBOX EDGE BOTTOM");
-          continue;
-        }
+        if (box.xmin < camera_info_.width * bbox_edge_x_) continue;
+        if (box.xmax > (camera_info_.width - (camera_info_.width * bbox_edge_x_))) continue;
+        if (box.ymin < camera_info_.height * bbox_edge_y_) continue;
+        if (box.ymax > (camera_info_.height - (camera_info_.height * bbox_edge_y_))) continue;
       }
 
       // ----------------------Extract points in the bounding box-----------
@@ -346,7 +292,7 @@ void ObjectDetectionStreamer::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
       // before adding new detection must convert filtered cloud into map frame
       sensor_msgs::PointCloud2 obj_cloud;
       pcl::toROSMsg(*cloud_in_bbox, obj_cloud);
-      transformPointCloud2(obj_cloud, robot_frame_);
+      transformPointCloud2(obj_cloud, lidar_frame_);
 
       // add new detection to unassigned detections vector
       vision_msgs::Detection3D new_detection;
@@ -379,15 +325,10 @@ void ObjectDetectionStreamer::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
   }
 
   pc2_out.header.stamp = ros::Time::now();
-  pc2_out.header.frame_id = robot_frame_;
+  pc2_out.header.frame_id = lidar_frame_;
   lidar_det_pub_.publish(pc2_out);
   detections_pub_.publish(detections);
-
-  auto t2 = debug_clock_.now();
-  ROS_DEBUG_STREAM(
-    "TIME PCL2 CB: " << std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count());
-}  // namespace object_detection
-
+}
 }  // namespace object_detection
 
 int main(int argc, char ** argv)

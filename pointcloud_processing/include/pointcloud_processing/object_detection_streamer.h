@@ -27,6 +27,7 @@
 
 #pragma once
 
+#include <darknet_ros_msgs/BoundingBoxes.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
@@ -39,24 +40,19 @@
 #include <vision_msgs/Detection3DArray.h>
 #include <vision_msgs/ObjectHypothesisWithPose.h>
 
-#include <chrono>
-
-// Darknet detection
-#include <darknet_ros_msgs/BoundingBoxes.h>
-
 // PCL specific includes
 // #include <pcl/ModelCoefficients.h>
 #include <pcl/filters/extract_indices.h>
-#include <pcl/filters/passthrough.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
+// #include <pcl/filters/passthrough.h>
+// #include <pcl/point_cloud.h>
+// #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 // #include <pcl/sample_consensus/model_types.h>
 // #include <pcl/sample_consensus/method_types.h>
 // #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/common/centroid.h>
 #include <pcl/common/common.h>
-#include <pcl/common/io.h>
+// #include <pcl/common/io.h>
 
 /**
  * Node API
@@ -117,7 +113,7 @@ private:
   double pcl_stale_time_, detection_confidence_threshold_, bbox_edge_x_, bbox_edge_y_;
 
   // the optical frame of the RGB camera (not the camera base frame)
-  std::string camera_optical_frame_, robot_frame_, lidar_frame_;
+  std::string camera_optical_frame_, lidar_frame_;
 
   // ROS Nodehandle
   ros::NodeHandle private_nh_;
@@ -135,9 +131,6 @@ private:
   // caches for callback data
   darknet_ros_msgs::BoundingBoxes current_boxes_;
   sensor_msgs::CameraInfo camera_info_;
-
-  // debug timers
-  std::chrono::high_resolution_clock debug_clock_;
 
   /**
    * @brief Callback function for bounding boxes detected by Darknet

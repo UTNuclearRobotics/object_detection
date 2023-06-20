@@ -114,7 +114,7 @@ void ObjectPoseEstimation::initiateDetections()
 
   // TODO probably need to a fancy queue version to only run the camerainfo and lidar frame callbacks
   ROS_INFO_STREAM("Waiting to acquire the lidar and camera optical frames.");
-  while (ros::ok() && lidar_frame_.empty() && camera_optical_frame_.empty()) {
+  while (ros::ok() && (lidar_frame_.empty() || camera_optical_frame_.empty())) {
     ros::spinOnce();
   }
   ROS_INFO_STREAM("Lidar frame acquired: " << lidar_frame_);
@@ -504,7 +504,7 @@ void ObjectPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
   lidar_frame_ = input_cloud.header.frame_id;
 
   // check that the sensor frames are initialized
-  if (lidar_frame_.empty() && camera_optical_frame_.empty()) return;
+  if (lidar_frame_.empty() || camera_optical_frame_.empty()) return;
 
   // check that we've received bounding boxes
   if (current_boxes_.bounding_boxes.empty()) return;
