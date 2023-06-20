@@ -47,8 +47,6 @@ ObjectPoseEstimation::ObjectPoseEstimation() : nh_(""), private_nh_("~")
   private_nh_.param<bool>("publish_all_detection_data", pub_det_data_, false);
   private_nh_.param<std::string>("map_frame", map_frame_, "map");
   private_nh_.param<std::string>("robot_frame", robot_frame_, "base_link");
-  private_nh_.param<std::string>(
-    "camera_optical_frame", camera_optical_frame_, "camera_optical_link");
 
   snapshot_client_ = nh_.serviceClient<image_processing::Snapshot>("image_snapshot/send_snapshot");
 
@@ -74,7 +72,8 @@ ObjectPoseEstimation::ObjectPoseEstimation() : nh_(""), private_nh_("~")
       private_nh_.param<std::string>("data_hosting_address", ip_address, "localhost");
       private_nh_.param<int>("data_hosting_port", ip_port, 4002);
 
-      data_url_ = "http://" + ip_address + ":" + std::to_string(ip_port) + "/detection_data/" + date_string + "/";
+      data_url_ = "http://" + ip_address + ":" + std::to_string(ip_port) + "/detection_data/" +
+                  date_string + "/";
     } else {
       data_url_ = data_directory_path_;
     }
@@ -113,6 +112,14 @@ void ObjectPoseEstimation::initiateDetections()
   private_nh_.param<double>("bbox_edge_x", bbox_edge_x_, 0.1);
   private_nh_.param<double>("bbox_edge_y", bbox_edge_y_, 0.01);
 
+  // TODO probably need to a fancy queue version to only run the camerainfo and lidar frame callbacks
+  ROS_INFO_STREAM("Waiting to acquire the lidar and camera optical frames.");
+  while (ros::ok() && lidar_frame_.empty() && camera_optical_frame_.empty()) {
+    ros::spinOnce();
+  }
+  ROS_INFO_STREAM("Lidar frame acquired: " << lidar_frame_);
+  ROS_INFO_STREAM("Camera optical frame acquired: " << camera_optical_frame_);
+
   // init robot pose to map origin wait for robot and camera transforms for a 2.5 minutes then give up
   ROS_INFO_STREAM("Waiting for transform from " << map_frame_ << " to " << robot_frame_);
   try {
@@ -148,10 +155,7 @@ void ObjectPoseEstimation::initiateDetections()
     current_inv_cam_tf_ = updateTf(map_frame_, camera_optical_frame_);
 
     // if robot hasn't moved beyond threshold then do nothing
-    if (!robotHasMoved(robot_movement_threshold)) {
-      ROS_DEBUG_THROTTLE(15.0, "ROBOT HAS NOT MOVED BEYOND THRESH");
-      continue;
-    }
+    if (!robotHasMoved(robot_movement_threshold)) continue;
 
     prev_robot_tf_ = current_robot_tf_;
 
@@ -280,7 +284,9 @@ void ObjectPoseEstimation::initiateDetections()
               }
             }
           } else {
-            ROS_WARN("Image Snapshot failed to call. Could not obtain and save the image for the new detection.");
+            ROS_WARN(
+              "Image Snapshot failed to call. Could not obtain and save the image for the new "
+              "detection.");
           }
 
           if (pub_det_data_) {
@@ -341,6 +347,7 @@ void ObjectPoseEstimation::bBoxCb(const darknet_ros_msgs::BoundingBoxesConstPtr 
    */
 void ObjectPoseEstimation::cameraInfoCb(const sensor_msgs::CameraInfoConstPtr msg)
 {
+  camera_optical_frame_ = msg->header.frame_id;
   camera_info_ = *msg;
 }
 
@@ -398,12 +405,9 @@ bool ObjectPoseEstimation::robotIsTurning(const double robot_turning_threshold)
   tf2::fromMsg(current_robot_tf_.transform.rotation, qt1);
   tf2::fromMsg(prev_robot_tf_.transform.rotation, qt2);
   double angle = qt1.angleShortestPath(qt2);
-  if (angle > robot_turning_threshold) {
-    ROS_DEBUG_STREAM("ROBOT TURNING: " << angle);
-    return true;
-  } else {
-    return false;
-  }
+
+  if (angle > robot_turning_threshold) return true;
+  return false;
 }
 
 /**
@@ -494,25 +498,19 @@ ObjectPoseEstimation::CloudPtr ObjectPoseEstimation::filterPointsInBox(
    */
 void ObjectPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
 {
-  if (lidar_frame_.empty()) {
-    lidar_frame_ = input_cloud.header.frame_id;
-    return;
-  }
+  // check if pointcloud is stale. Do not update lidar frame if it is
+  if (ros::Time::now().toSec() - input_cloud.header.stamp.toSec() > pcl_stale_time_) return;
 
-  if (ros::Time::now().toSec() - input_cloud.header.stamp.toSec() > pcl_stale_time_) {
-    ROS_DEBUG_STREAM("POINTCLOUD STALE");
-    return;
-  }
+  lidar_frame_ = input_cloud.header.frame_id;
+
+  // check that the sensor frames are initialized
+  if (lidar_frame_.empty() && camera_optical_frame_.empty()) return;
 
   // check that we've received bounding boxes
-  if (current_boxes_.bounding_boxes.empty()) {
-    return;
-  }
+  if (current_boxes_.bounding_boxes.empty()) return;
 
   // check that we've received camera info
-  if (camera_info_.height == 0 || camera_info_.width == 0) {
-    return;
-  }
+  if (camera_info_.height == 0 || camera_info_.width == 0) return;
 
   // transform the pointcloud into the RGB optical frame
   tf2::doTransform(input_cloud, input_cloud, lidar_to_camera_tf_);
@@ -537,23 +535,10 @@ void ObjectPoseEstimation::pointCloudCb(sensor_msgs::PointCloud2 input_cloud)
     if (box.probability >= detection_confidence_threshold_ && object_classes.count(box.Class)) {
       if (bbox_edge_) {
         // check for bounding boxes being close to edges
-        if (box.xmin < camera_info_.width * bbox_edge_x_) {
-          ROS_DEBUG("BBOX EDGE LEFT");
-          continue;
-        }
-        if (box.xmax > (camera_info_.width - (camera_info_.width * bbox_edge_x_))) {
-          ROS_DEBUG("BBOX EDGE RIGHT");
-          continue;
-        }
-
-        if (box.ymin < camera_info_.height * bbox_edge_y_) {
-          ROS_DEBUG("BBOX EDGE TOP");
-          continue;
-        }
-        if (box.ymax > (camera_info_.height - (camera_info_.height * bbox_edge_y_))) {
-          ROS_DEBUG("BBOX EDGE BOTTOM");
-          continue;
-        }
+        if (box.xmin < camera_info_.width * bbox_edge_x_) continue;
+        if (box.xmax > (camera_info_.width - (camera_info_.width * bbox_edge_x_))) continue;
+        if (box.ymin < camera_info_.height * bbox_edge_y_) continue;
+        if (box.ymax > (camera_info_.height - (camera_info_.height * bbox_edge_y_))) continue;
       }
 
       // ----------------------Extract points in the bounding box-----------
@@ -605,9 +590,7 @@ int ObjectPoseEstimation::isRegisteredObject(
   const std::string object_class, sensor_msgs::PointCloud2 cloud_in)
 {
   for (const ObjectPoseEstimation::ObjectDetection & obj : object_detections_) {
-    if (object_class != obj.object_class) {
-      continue;
-    }
+    if (object_class != obj.object_class) continue;
 
     bool obj_match{true};
     for (int i = 0; i < obj.camera_tfs.size(); ++i) {
@@ -632,9 +615,7 @@ int ObjectPoseEstimation::isRegisteredObject(
       }
     }
     // if we made it through the last loop without breaking then it is a obj match and return the associated object
-    if (obj_match) {
-      return obj.object_number;
-    }
+    if (obj_match) return obj.object_number;
   }
   return 0;
 }
@@ -650,9 +631,7 @@ int ObjectPoseEstimation::isCloseToObject(
   const std::string object_class, const geometry_msgs::PointStamped pos_in, const double dist)
 {
   for (const ObjectPoseEstimation::ObjectDetection & obj : object_detections_) {
-    if (object_class != obj.object_class) {
-      continue;
-    }
+    if (object_class != obj.object_class) continue;
 
     if (
       (obj.position.point.x - pos_in.point.x) * (obj.position.point.x - pos_in.point.x) +
@@ -748,7 +727,9 @@ void ObjectPoseEstimation::updateRegisteredObject(
       // img url stuff
       if (snapshot.response.img_valid) {
         try {
-          std::string img_file_name{object_publisher_prefix + "_view" + std::to_string(object_detections_[obj_index].camera_tfs.size()) + ".png"};
+          std::string img_file_name{
+            object_publisher_prefix + "_view" +
+            std::to_string(object_detections_[obj_index].camera_tfs.size()) + ".png"};
           cv_bridge::CvImagePtr cv_ptr;
           cv_ptr = cv_bridge::toCvCopy(snapshot.response.img, snapshot.response.img.encoding);
           cv::imwrite(data_directory_path_ + img_file_name, cv_ptr->image);
@@ -916,9 +897,7 @@ void ObjectPoseEstimation::saveBag()
 bool ObjectPoseEstimation::pubDataCb(
   std_srvs::Empty::Request & req, std_srvs::Empty::Response & res)
 {
-  if (object_detections_.empty()) {
-    return false;
-  }
+  if (object_detections_.empty()) return false;
 
   for (int i = 0; i < object_detections_.size(); i++) {
     publishDetection(i);
@@ -935,9 +914,8 @@ bool ObjectPoseEstimation::pubDataCb(
 bool ObjectPoseEstimation::saveBagCb(
   std_srvs::Empty::Request & req, std_srvs::Empty::Response & res)
 {
-  if (object_detections_.empty()) {
-    return false;
-  }
+  if (object_detections_.empty()) return false;
+
   saveBag();
   return true;
 }

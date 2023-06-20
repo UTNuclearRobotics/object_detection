@@ -21,17 +21,12 @@ find_package(catkin REQUIRED COMPONENTS
   pcl_ros
   roscpp
   darknet_ros_msgs
-  message_filters
-  visualization_msgs
   tf2_sensor_msgs
-  vision_msgs
   geometry_msgs
-  image_transport
   image_processing
   detection_msgs
   cv_bridge
   std_msgs
-  rospack
 )
 
 # # System dependencies are found with CMake's conventions
@@ -48,17 +43,13 @@ catkin_package(
   pcl_conversions
   pcl_ros
   roscpp
-  message_filters
   darknet_ros_msgs
   tf2_sensor_msgs
-  vision_msgs
   geometry_msgs
-  image_transport
   image_processing
   detection_msgs
   cv_bridge
   std_msgs
-  rospack
 )
 
 # ##########
@@ -78,6 +69,7 @@ add_executable(object_pose_estimation src/object_pose_estimation.cpp)
 target_link_libraries(object_detection_streamer ${catkin_LIBRARIES})
 target_link_libraries(object_pose_estimation ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
+add_dependencies(object_detection_streamer ${${PROJECT_NAME}_exported_objects} ${catkin_EXPORTED_TARGETS})
 add_dependencies(object_pose_estimation ${${PROJECT_NAME}_exported_objects} ${catkin_EXPORTED_TARGETS})
 
 # # Add folders to be run by python nosetests

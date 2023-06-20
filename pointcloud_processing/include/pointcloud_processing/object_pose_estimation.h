@@ -28,46 +28,37 @@
 #pragma once
 
 #include <cv_bridge/cv_bridge.h>
+#include <darknet_ros_msgs/BoundingBoxes.h>
 #include <detection_msgs/DetectionArray.h>
 #include <geometry_msgs/PointStamped.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <image_processing/Snapshot.h>
-#include <ros/package.h>
 #include <ros/ros.h>
 #include <rosbag/bag.h>
 #include <sensor_msgs/CameraInfo.h>
-#include <sensor_msgs/CompressedImage.h>
-#include <sensor_msgs/Image.h>
 #include <std_msgs/String.h>
 #include <std_srvs/Empty.h>
 #include <tf2/convert.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_sensor_msgs/tf2_sensor_msgs.h>
-#include <vision_msgs/Detection3DArray.h>
 
-#include <ctime>
 #include <filesystem>
 #include <opencv2/opencv.hpp>
 
-// #include <chrono>
-
-// Darknet detection
-#include <darknet_ros_msgs/BoundingBoxes.h>
-
 // PCL specific includes
-#include <pcl/ModelCoefficients.h>
+// #include <pcl/ModelCoefficients.h>
 #include <pcl/filters/extract_indices.h>
-#include <pcl/filters/passthrough.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
+// #include <pcl/filters/passthrough.h>
+// #include <pcl/point_cloud.h>
+// #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
 // #include <pcl/sample_consensus/model_types.h>
 // #include <pcl/sample_consensus/method_types.h>
 // #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/common/centroid.h>
-#include <pcl/common/common.h>
+// #include <pcl/common/common.h>
 
 /**
  * Node API
