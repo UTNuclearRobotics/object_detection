@@ -51,6 +51,7 @@ This ROS package is where the magic happens with the Object detection model fusi
 This node was made in the process of making the larger and more sophisticated `object_pose_estimation`.  This node takes in the same inputs as the pose estimation node and provides a live view of the filtered LiDAR data for each tracked object inside of its bounding box.
 
 ![object streamer image](documentation/streamer_demo_crop_2021.gif)
+
 Figure 1: Object detection streamer example output from 2021. A person is detected via YOLO and the lidar is filtered down to the area of the bounding box.
 
 
@@ -121,6 +122,7 @@ Figure 1: Object detection streamer example output from 2021. A person is detect
 This node tracks the position of objects detected in the environment by a mobile robot.  It assumes the objects are static for this pose estimation and tracking.
 
 ![object pose estimation motorbike image](documentation/pose_estimation_motorbike_10views.png)
+
 Figure 2: Object pose estimation example output from 2022. A motorbike is detected with 10 different views via YOLO.  All of the combined LiDAR data is filtered among the different views to produce a single pointcloud and a centroid (pointstamped).
 
 ###### Subscribers
